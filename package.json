@@ -1,0 +1,22 @@
+{
+  "name": "vanilla-template",
+  "version": "1.0.0",
+  "description": "The following repo is a project for demonstrating best practices in structuring a node.js project\r Note that when a file or directory contains \"_EXAMPLE\" at its extension or name, it has to be removed. We have added this to demonstration purposes, because the main files would be ignored by git.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "clipboardy": "^4.0.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "nodemon": "^3.1.9",
+    "pg": "^8.14.1",
+    "web3": "^4.16.0"
+  }
+}
