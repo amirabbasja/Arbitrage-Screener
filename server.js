@@ -10,7 +10,7 @@ import {app} from "./src/app.js"
 
 // Import routers
 import {indexRouter} from "./src/routes/index.js"
-import { userRouter } from "./src/routes/user.js";
+import { quotesRouter } from "./src/routes/quotes.js";
 
 // Load .env files
 const __filename = fileURLToPath(import.meta.url);
@@ -22,7 +22,7 @@ app.use(express.json())
 
 // Use the routes
 app.use("/", indexRouter)
-app.use("/user", userRouter)
+app.use("/quote", quotesRouter)
 
 // Server setup
 const port = process.env.port || 3000

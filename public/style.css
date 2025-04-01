@@ -10,3 +10,7 @@ td, th {
     padding: .8em;
     border: 1px solid #000;
 }
+
+th {
+    padding: .1em;
+}
