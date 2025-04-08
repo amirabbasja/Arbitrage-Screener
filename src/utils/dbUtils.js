@@ -9,10 +9,44 @@ const {Pool} = pg
  */
 async function testDatabaseConnection(pool, verbose = false) {
     try {
-        await pool.query('SELECT NOW()') // Simple query to test connection
+        await pool.query('SELECT NOW()') 
         return true
     } catch (error) {
         if (verbose) {console.error('Database connection failed:', error)}
+        return false
+    }
+}
+
+/**
+ * Create a database with specific name. Need to connect to default postgers database 
+ * named "postgres". If not found, an error will be thrown.
+ * @param {JSON} dbInfo - Database connection info, containing keys "host", "port", "user", "password
+ * @param {String} dbName - Name of the database
+ * @param {boolean} verbose - Optional flag to enable verbose logging
+ * @returns {Promise<boolean>} - True if creation is successful, false otherwise
+ */
+async function createDatabase(dbInfo, dbName, verbose = false) {
+    try{
+        // Connect to default postgres database first
+        const pool = new Pool({
+            host: dbInfo.host,
+            port: dbInfo.port,
+            user: dbInfo.user,
+            password: dbInfo.password,
+            database: 'postgres' // Connect to default db to create a new one
+        })
+
+        try {
+            await pool.query(`CREATE DATABASE "${dbName}"`) 
+            await pool.end()
+            return true
+        } catch (error) {
+            if (verbose) {console.error('Database creation failed:', error)}
+            await pool.end()
+            return false
+        }
+    } catch (error) {
+        if (verbose) {console.error("Could not connect to default database postgres. Create the database manually.")}
         return false
     }
 }
@@ -186,28 +220,28 @@ async function getEntry(tableName, conditions, pool, options = {}) {
  */
 async function deleteEntry(tableName, conditions, pool, options = {}) {
     // Build the WHERE clause
-    const whereParams = [];
-    const whereClauses = [];
+    const whereParams = []
+    const whereClauses = []
     
     Object.entries(conditions).forEach(([column, value], index) => {
-        whereClauses.push(`${column} = $${index + 1}`);
-        whereParams.push(value);
-    });
+        whereClauses.push(`${column} = $${index + 1}`)
+        whereParams.push(value)
+    })
     
     if (whereClauses.length === 0) {
-        throw new Error('At least one condition is required for safety');
+        throw new Error('At least one condition is required for safety')
     }
     
-    const returningClause = options.returning ? 'RETURNING *' : '';
+    const returningClause = options.returning ? 'RETURNING *' : ''
     
     // Construct the delete query
-    const query = `DELETE FROM ${tableName} WHERE ${whereClauses.join(' AND ')} ${returningClause}`;
+    const query = `DELETE FROM ${tableName} WHERE ${whereClauses.join(' AND ')} ${returningClause}`
     
     try {
-        const result = await pool.query(query, whereParams);
-        return options.returning ? (result.rows[0] || null) : result.rowCount;
+        const result = await pool.query(query, whereParams)
+        return options.returning ? (result.rows[0] || null) : result.rowCount
     } catch (error) {
-        throw new Error(`Failed to delete entry from ${tableName}: ${error.message}`);
+        throw new Error(`Failed to delete entry from ${tableName}: ${error.message}`)
     }
 }
 
@@ -224,39 +258,40 @@ async function deleteEntry(tableName, conditions, pool, options = {}) {
 async function updateRecords(tableName, pool, conditions, updates) {
     try {
       // Build SET clause from updates object
-        const setClause = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(", ");
+        const setClause = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(", ")
         
-        let whereClause = '';
-        let values = [...Object.values(updates)];
+        let whereClause = ''
+        let values = [...Object.values(updates)]
         
         // Build WHERE clause from conditions object
         if (Object.keys(conditions).length > 0) {
         whereClause = 'WHERE ' + Object.keys(conditions)
             .map((key, index) => `${key} = $${index + 1 + Object.keys(updates).length}`)
-            .join(" AND ");
+            .join(" AND ")
         
-        values = [...values, ...Object.values(conditions)];
+        values = [...values, ...Object.values(conditions)]
         }
         
-        const query = `UPDATE ${tableName} SET ${setClause} ${whereClause} RETURNING * `;
+        const query = `UPDATE ${tableName} SET ${setClause} ${whereClause} RETURNING * `
         
-        const result = await pool.query(query, values);
+        const result = await pool.query(query, values)
         
         if (result.rows.length === 0) {
-            throw new Error(`No records matched the specified conditions`);
+            throw new Error(`No records matched the specified conditions`)
         }
         
-        return result.rows;
+        return result.rows
     } catch (error) {
-        throw new Error(`Failed to update records: ${error.message}`);
+        throw new Error(`Failed to update records: ${error.message}`)
     }
 }
 
-export { 
+export default { 
     testDatabaseConnection,
     checkDatabaseExists,
     checkTableExists,
     getAllFromTable,
+    createDatabase,
     updateRecords,
     createTable,
     deleteEntry,

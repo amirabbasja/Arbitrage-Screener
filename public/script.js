@@ -1,14 +1,14 @@
 function formatNumber(num) {
     if (num >= 1) {
-        return Number(num.toFixed(2));
+        return Number(num.toFixed(3));
     } else {
-        return num.toExponential(2);
+        return num.toExponential(3);
     }
 }
 
 async function tmpFcn(){
     const cell = document.getElementById("eth_uniswap_v2_ETHUSDT")
-    const url = `/quote/uniswapV2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
+    const url = `/quote/eth/uniswapV2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
 
     const response = await (await fetch(url)).json()
     const data = response.data

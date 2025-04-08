@@ -6,8 +6,9 @@ const quotesRouter = express.Router()
 // Define the handlers
 const handler_ETH = new ethHandler(process.env.alchemy_api_key)
 
-quotesRouter.get("/:exchange/:address", async (req, res) => {
+quotesRouter.get("/:chain/:exchange/:address", async (req, res) => {
     const address = req.params.address 
+    const chain = req.params.chain
     const exchange = req.params.exchange
 
     try{

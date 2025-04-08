@@ -244,8 +244,10 @@ class ethHandler{
 /** A class that helps with finding trading pairs */
 class crawler{
     /**
-     * Creates an instance of ethHandler class which helps with interaction 
-     * with ethereum mainnet using alchemy.
+     * Creates an instance of ethHandler class which helps with interaction with ethereum
+     * mainnet using alchemy. 
+     * IMPORTANT: All method names should have the following format: <exchangeName>Crawler_<chainName>
+     *      ChainName should be either abbreviated (e.g. ETH) and in uppercase
      * @param {string} apiKey - Your Alchemy API key.
      */
     constructor(apiKey){
@@ -257,6 +259,7 @@ class crawler{
         this.uniswap_v2_factory_address_ETH = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
         this.uniswap_v3_factory_address_ETH = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
         this.sushiswap_v2_factory_address_ETH = "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+        this.curveProtocol_registry_address_ETH = "0x90E00ACe148ca3b23Ac1bC8C240C2a7Dd9c2d7f5"
     }
 
     /**
@@ -349,6 +352,7 @@ class crawler{
         }
     }
 
+
     /**
      * Gets all possible trading pairs from Sushiswap V2 ethereum mainnet
      * @param {String} token0Address - First toke's contract address
@@ -400,25 +404,78 @@ class crawler{
             return {"msg": error}
         }
     }
+
+
+    /**
+     * Gets all possible trading pairs from Curve protocol ethereum mainnet. It uses
+     * Curve's MetaRegistry contract
+     * @param {String} token0Address - First toke's contract address
+     * @param {String} token1Address - Second toke's contract address
+     * @returns {array} An array of trading pool objects. If an error has occurred, returns 
+     *  an object with a message key, indicating the error message. If no pools are found
+     *  returns an object with msg key, indicating that no pools were found.
+     */
+    async curveProtocolCrawler_ETH(token0Address, token1Address){
+        // Load ABIs
+        const curveProtocolFactory_ABI = await loadABI(join(getDirPath(), "./ABIs/curveRegistry_ETH.json"))
+
+        // Contracts
+        const curveRegistry = new this.web3.eth.Contract(curveProtocolFactory_ABI, this.curveProtocol_registry_address_ETH)
+
+        async function getPools(token0Address, token1Address) {
+            try {
+                const pairAddress = await curveRegistry.methods.find_pool_for_coins(token0Address, token1Address).call()
+                
+                // Check if the pair exists (not zero address)
+                if (pairAddress !== '0x0000000000000000000000000000000000000000') {
+                    const poolName = await curveRegistry.methods.get_pool_name(pairAddress).call()
+                    const isMeta = await curveRegistry.methods.is_meta(pairAddress).call()
+                    return {pairAddress, poolName, isMeta}
+                }
+                return {pairAddress: null, poolName: null, isMeta:null}
+            } catch (error) {
+                return {pairAddress: null, poolName: null, isMeta:null}
+            }
+        }
+
+        try {
+            // Fetch pools
+            const allPools = []
+            const {pairAddress, poolName, isMeta} = await getPools(token0Address, token1Address)
+            
+            if(pairAddress){
+                allPools.push({
+                    exchange: "curveProtocol",
+                    address: pairAddress,
+                    type: poolName,
+                    is_meta: isMeta
+                })
+            }
+            if(allPools.length === 0){
+                return {"msg": "No pools found"}
+            }else{
+                return allPools
+            }
+
+        } catch (error) {
+            return {"msg": error}
+        }
+    }
 }
+
 // prettifyAndCopyJson(join(getDirPath(), "ABIs/uniswapV2Factory.json"))
 
+// // Get the api key from the .env file
+// dotenv.config({ path: join(getDirPath(), "../../.env") })
 
-// Get the api key from the .env file
-dotenv.config({ path: join(getDirPath(), "../../.env") })
-
-// const apiKey = "Rn-7BZZPcv53BM9dDeiGNkwn3ufqDer6"
-// const handler = new ethHandler(process.env.alchemy_api_key)
-// const poolAddress = '0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc'
-
-// const poolInfo = await handler.getPoolInfo_UniswapV2(poolAddress)
-// console.log(await handler.getPoolPrice_UniswapV2(poolAddress, poolInfo))
-
-const crawlerHandler = new crawler(process.env.alchemy_api_key)
-const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
-const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
-console.log(await crawlerHandler.sushiswapCrawler_ETH(USDT, WETH))
+// const crawlerHandler = new crawler(process.env.alchemy_api_key)
+// const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
+// const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
+// const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f"
+// console.log(await crawlerHandler.curveProtocolCrawler_ETH(WETH, USDT))
 
 export{
+    getDirPath,
     ethHandler,
+    crawler
 }
