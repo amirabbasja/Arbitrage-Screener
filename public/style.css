@@ -2,7 +2,6 @@
     align-items: center;
     border: 1px solid #000;
     border-collapse: collapse;
-    margin: 0 auto;
     text-align: center;
 }
 
@@ -11,6 +10,10 @@ td, th {
     border: 1px solid #000;
 }
 
-th {
-    padding: .1em;
+.table-header {
+    padding: .3em;
+}
+
+table {
+    margin: 1em 0;
 }

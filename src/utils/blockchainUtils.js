@@ -327,6 +327,7 @@ class crawler{
                     exchange: "uniswap",
                     address: v2Pool,
                     type: 'V2',
+                    extraInfo: `-`,
                 })
             }
 
@@ -336,7 +337,7 @@ class crawler{
                         exchange: "uniswap",
                         address: pool.address,
                         type: 'V3',
-                        fee: pool.fee,
+                        extraInfo: `fee:${pool.fee}`,
                     })
                 }
             }
@@ -391,6 +392,7 @@ class crawler{
                     exchange: "sushiswap",
                     address: v2Pool,
                     type: 'V2',
+                    extraInfo: `-`,
                 })
             }
 
@@ -448,7 +450,7 @@ class crawler{
                     exchange: "curveProtocol",
                     address: pairAddress,
                     type: poolName,
-                    is_meta: isMeta
+                    extraInfo: `isMeta:${isMeta}`,
                 })
             }
             if(allPools.length === 0){

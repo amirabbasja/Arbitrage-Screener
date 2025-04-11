@@ -198,7 +198,6 @@ async function getEntry(tableName, conditions, pool, options = {}) {
 
     // Construct the full query
     const query = `SELECT ${fields} FROM ${tableName} ${whereClause} ${orderByClause} LIMIT 1`
-
     try {
         const result = await pool.query(query, whereParams)
         return result.rows.length > 0 ? result.rows[0] : null
@@ -206,6 +205,25 @@ async function getEntry(tableName, conditions, pool, options = {}) {
         throw new Error(`Failed to retrieve entry from ${tableName}: ${error.message}`)
     }
 }
+
+/**
+ * Retrieves an entire table and returns it as a JSON object
+ * @param {string} tableName - The name of the table to retrieve
+ * @param {Pool} pool - The pool of database connections
+ * @returns {Promise<Array>} - Promise resolving to an array of row objects
+ */
+const getTableAsJson = async (tableName, pool) => {
+    try {
+        // Query the table
+        const result = await pool.query(`SELECT * FROM ${tableName}`);
+
+        // Return the rows as JSON
+        return result.rows;
+    } catch (error) {
+        console.error('Error retrieving table data:', error);
+        throw error;
+    }
+};
 
 /**
  * Deletes a single entry from a PostgreSQL table based on specific conditions.
@@ -292,6 +310,7 @@ export default {
     checkTableExists,
     getAllFromTable,
     createDatabase,
+    getTableAsJson,
     updateRecords,
     createTable,
     deleteEntry,

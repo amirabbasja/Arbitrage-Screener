@@ -1,3 +1,5 @@
+// Gets quotes for each asset
+
 import express from "express"
 import {ethHandler} from "../utils/blockchainUtils.js"
 
@@ -37,17 +39,5 @@ quotesRouter.get("/:chain/:exchange/:address", async (req, res) => {
         })
     }
 })
-
-// quotesRouter.post("/", (req, res) => {
-//     res.send("User post method")
-// })
-
-// quotesRouter.put("/", (req, res) => {
-//     res.send("User put method")
-// })
-
-// quotesRouter.delete("/", (req, res) => {
-//     res.send("User delete method")
-// })
 
 export {quotesRouter}
