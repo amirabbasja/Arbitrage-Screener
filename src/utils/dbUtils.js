@@ -1,4 +1,5 @@
 import pg  from "pg"
+import assert from "assert"
 const {Pool} = pg
 
 /**
@@ -26,6 +27,7 @@ async function testDatabaseConnection(pool, verbose = false) {
  * @returns {Promise<boolean>} - True if creation is successful, false otherwise
  */
 async function createDatabase(dbInfo, dbName, verbose = false) {
+    
     try{
         // Connect to default postgres database first
         const pool = new Pool({
@@ -121,6 +123,7 @@ async function addRow(tableName, data, pool) {
         const columns = Object.keys(data).join(', ')
         const values = Object.values(data).map((value) => `'${value}'`).join(', ')
         const query = `INSERT INTO ${tableName} (${columns}) VALUES (${values}) RETURNING *`
+        
         const result = await pool.query(query)
         return result.rows[0]
     } catch (error) {
@@ -293,10 +296,6 @@ async function updateRecords(tableName, pool, conditions, updates) {
         const query = `UPDATE ${tableName} SET ${setClause} ${whereClause} RETURNING * `
         
         const result = await pool.query(query, values)
-        
-        if (result.rows.length === 0) {
-            throw new Error(`No records matched the specified conditions`)
-        }
         
         return result.rows
     } catch (error) {

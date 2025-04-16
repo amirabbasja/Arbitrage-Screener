@@ -47,7 +47,7 @@ async function populatePairTables() {
 
     // Add tables
     for (let i = 0; i < assets.length; i++) {
-        tableHtml = `<table class="centered-table">\n`
+        tableHtml = `<table class="centered-table" id="table-${assets[i][0].token0.toUpperCase()}-${assets[i][0].token1.toUpperCase()}">\n`
 
         // Add headers
         tableHtml += `\t<tr>\n`
@@ -71,8 +71,12 @@ async function populatePairTables() {
         _html += tableHtml
     }
 
-    // Add to body
-    document.body.innerHTML += _html
+    // // Add to body
+    const tableContainer = document.createElement("div")
+    tableContainer.innerHTML = _html
+    document.body.appendChild(tableContainer)
+
+    console.log("finished")
 }
 
 async function tmpFcn(){
@@ -90,5 +94,41 @@ async function tmpFcn(){
     cell.textContent = quote
 }
 
-window.addEventListener('load', tmpFcn)
+// Updates the quotes of the main page by running the quoteFetcher.js script.
+async function updateQuotes(){
+    const activationBtn = document.getElementById("activation-btn")
+
+    activationBtn.addEventListener("click", async () => {
+        const response = await (await fetch("/quote/quoteFetcher")).json()
+        const data = response.data
+        const startNewFetcher = data.tasks.every(task => task.status !== "running")
+
+        // Start the quote fetcher script when start button is clicked. Stop it when It is clicked again.
+        if(startNewFetcher){
+            const response = await (await fetch("/quote/quoteFetcher", {method: "POST"})).json()
+            if (response.status === "success") {
+                // Change button style
+                document.getElementById("activation-btn").textContent = "Stop"
+                document.getElementById("activation-btn").classList.remove("start-btn")
+                document.getElementById("activation-btn").classList.add("stop-btn")
+            }
+        }else{
+            // Get all running tasks and terminate them
+            const _response = await (await fetch("/quote/quoteFetcher")).json()
+            const _runningTasks = _response.data.tasks.filter( task => task.status === "running")
+            _runningTasks.forEach(async (task) => {
+                try{await fetch(`/quote/quoteFetcher/${task.id}`, {method: "DELETE"})}
+                catch(err){console.log(err)}
+            });
+
+            // Change button style
+            document.getElementById("activation-btn").classList.remove("stop-btn")
+            document.getElementById("activation-btn").classList.add("start-btn")
+            document.getElementById("activation-btn").textContent = "Start"
+        }
+
+    })
+}
+
+document.addEventListener("topMenuLoaded", updateQuotes)
 window.addEventListener('load', populatePairTables)

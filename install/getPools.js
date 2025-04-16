@@ -25,7 +25,8 @@ if(! await databaseUtils.checkTableExists("pairs", dbPool, "public")){
             exchange VARCHAR(255) NOT NULL,
             exchange_type VARCHAR(255) NOT NULL,
             contract_address VARCHAR(255) NOT NULL,
-            extra_info VARCHAR(255) NOT NULL
+            extra_info VARCHAR(255) NOT NULL,
+            latest_quote JSONB
         `
     await databaseUtils.createTable("pairs", dbPool, _query)
 }

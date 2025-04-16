@@ -1,3 +1,8 @@
+/* Import trh font */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@300;400;500;700&display=swap');
+
+/* Table style */
+
 .centered-table {
     align-items: center;
     border: 1px solid #000;
@@ -16,4 +21,87 @@ td, th {
 
 table {
     margin: 1em 0;
+    font-family: 'Roboto Slab', serif;
+}
+
+
+/* Top pane style */
+
+.top-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 5px;
+    background-color: #08090A;
+    color: white;
+    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    font-family: 'Roboto Slab', serif;
+    height: 60px;
+    box-sizing: border-box;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.nav-links a {
+    color: #ecf0f1;
+    text-decoration: none;
+    margin: 0 15px;
+    padding: 5px 0;
+}
+
+.nav-links a.topMenu-active {
+    border-bottom: 2px solid #F4F7F5;
+}
+
+.user-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.activation-btn {
+    border: none;
+    cursor: pointer;
+    padding: 0px 25px;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+    font-family:  'Roboto Slab', serif;
+    height: 40px;
+    width: 90px;
+}
+
+.activation-btn:hover {
+    cursor: pointer;
+    border: #fff solid 1px;
+    opacity: 0.9;
+    padding: 0px 23px;    
+}
+
+.stop-btn {
+    background-color: #a33838;;
+    color: white;
+}
+
+.start-btn {
+    background-color: #36383b;
+    color: white;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Help page */
+
+.help-content{
+    margin: 1em auto;
+    width: 1000px;
+    font-family: 'Roboto Slab', serif;
 }

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+    <title>Arbitrager Help</title>
+</head>
+<body>
+    <div id="help-content" class = "help-content"></div>
+    <!-- Include the top menu script -->
+    <script src="./scripts/include-top-panel.js" type="module"></script>
+
+    <!-- Add the md file to the page -->
+    <script type="module">
+        const response = await fetch("/help/readMD")
+        const data = await response.text()
+        document.getElementById("help-content").innerHTML = data
+    </script>
+</body>
+</html>
