@@ -81,7 +81,7 @@ async function populatePairTables() {
 
 async function tmpFcn(){
     const cell = document.getElementById("eth_uniswap_v2_ETHUSDT")
-    const url = `/quote/eth/uniswapV2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
+    const url = `http://localhost:3000/quote/eth/uniswapV2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
 
     const response = await (await fetch(url)).json()
     const data = response.data
@@ -130,5 +130,21 @@ async function updateQuotes(){
     })
 }
 
+async function startBtnLoad(){
+    const response = await (await fetch("/quote/quoteFetcher")).json()
+    const data = response.data
+    const runningTasks = data.tasks.every(task => task.status !== "running")
+    if (runningTasks) {
+        document.getElementById("activation-btn").textContent = "Start"
+        document.getElementById("activation-btn").classList.remove("stop-btn")
+        document.getElementById("activation-btn").classList.add("start-btn")
+    }else{
+        document.getElementById("activation-btn").textContent = "Stop"
+        document.getElementById("activation-btn").classList.remove("start-btn")
+        document.getElementById("activation-btn").classList.add("stop-btn")
+    }
+}
+
 document.addEventListener("topMenuLoaded", updateQuotes)
 window.addEventListener('load', populatePairTables)
+window.addEventListener("load", startBtnLoad)

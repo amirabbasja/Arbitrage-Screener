@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bottleneck": "^2.19.5",
     "clipboardy": "^4.0.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

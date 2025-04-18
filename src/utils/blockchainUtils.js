@@ -4,6 +4,8 @@ import {dirname, join} from "path"
 import dotenv from "dotenv"
 import clipboardy from "clipboardy"
 import Web3 from 'web3'
+import databaseUtils from "./dbUtils.js"
+
 
 /**
  * Reads a JSON file, prettifies it, and copies it to the clipboard
@@ -153,23 +155,61 @@ class ethHandler{
     }
 
     /**
-     * Gets token's information using its address
-     * @param {string} tokenAddress - The address of the token
-     * @param {object} ERC20_ABI - The ABI of the ERC20 token
+     * Gets token's information using its address. If checkDB is defined, first 
+     * it will check the database for the token information, if not found, will
+     * make request to the RPC.
+     * @param {string} tokenAddress - The address of the token. Can be undefined 
+     *  if checkDB is defined.
+     * @param {object} ERC20_ABI - The ABI of the ERC20 token. Can be undefined 
+     *  if checkDB is defined.
+     * @param {object} checkDB - An object for search information of the token.
+     *  It should have the table name in "table" key, blockchain name is also 
+     *  mandatory under the key "blockchain". An instance of postgreql pool should
+     *  be passed under the key "pool". To search, one of the keys "symbol" or 
+     *  "contract_address" should be inputted as well.
      * @returns {object} An object resembling token's address, decimals and symbol 
      */
-    async getTokenInfo(tokenAddress, ERC20_ABI){
-        const tokenContract = new this.web3.eth.Contract(ERC20_ABI, tokenAddress)
+    async getTokenInfo(tokenAddress, ERC20_ABI, checkDB){
+        let _tokenAddress = undefined
+        let _tokenSymbol = undefined
+        let _tokenDecimals = undefined
+        let tokenSymbol = undefined
+        let tokenDecimals = undefined
 
-        const tokenSymbol = await tokenContract.methods.symbol().call()
-        const tokenDecimals = await tokenContract.methods.decimals().call()
+        if (checkDB){
+            if(checkDB.table === undefined){ throw new Error("Table name not defined") }
+            if(checkDB.blockchain === undefined){ throw new Error("Blockchain name not defined") }
+            if(checkDB.pool === undefined){ throw new Error("Pool not defined") }
+            if(checkDB.symbol === undefined && checkDB.contract_address === undefined){ throw new Error("Symbol or contract address not defined") }
+            
+            const condition = checkDB.symbol ? {symbol: checkDB.symbol} : {contract_address: checkDB.contract_address}
+            const tokenData = await databaseUtils.getEntry(checkDB.table, condition, checkDB.pool)
+            
+            if(tokenData){
+                _tokenAddress = tokenData.contract_address
+                _tokenSymbol = tokenData.symbol
+                _tokenDecimals = tokenData.decimals
+
+                return {
+                    address: _tokenAddress,
+                    symbol: _tokenSymbol,
+                    decimals: _tokenDecimals,
+                }
+            }
+        }else{
+            // Make the contract
+            const tokenContract = new this.web3.eth.Contract(ERC20_ABI, tokenAddress)
+
+            tokenSymbol = await tokenContract.methods.symbol().call()
+            tokenDecimals = await tokenContract.methods.decimals().call()
+        }
 
         return {
             address: tokenAddress,
             symbol: tokenSymbol,
             decimals: tokenDecimals,
         }
-    }   
+    }
 
     /**
      * Gets a uniswap V2's pool information
@@ -219,8 +259,8 @@ class ethHandler{
         const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
 
         // Calculate the pool price
-        const divisor0 = 10n ** poolInfo.token0.decimals
-        const divisor1 = 10n ** poolInfo.token1.decimals
+        const divisor0 = 10n ** BigInt(poolInfo.token0.decimals)
+        const divisor1 = 10n ** BigInt(poolInfo.token1.decimals)
 
         const reserve0 = parseFloat(String(_reserve0)) / parseFloat(String(divisor0))
         const reserve1 = parseFloat(String(_reserve1)) / parseFloat(String(divisor1))
@@ -477,6 +517,7 @@ class crawler{
 // console.log(await crawlerHandler.curveProtocolCrawler_ETH(WETH, USDT))
 
 export{
+    loadABI,
     getDirPath,
     ethHandler,
     crawler

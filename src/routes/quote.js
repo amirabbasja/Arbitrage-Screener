@@ -6,45 +6,93 @@ import {ethHandler} from "../utils/blockchainUtils.js"
 import {app} from "../app.js"
 import databaseUtils from "../utils/dbUtils.js"
 import { spawn } from "child_process"
+import { rateLimitMiddleware } from "../utils/requestLimiter.js"
+import dbUtils from '../utils/dbUtils.js';
 
 const quotesRouter = express.Router()
 
 // Define the handlers
 const handler_ETH = new ethHandler(process.env.alchemy_api_key)
 
-quotesRouter.get("/:chain/:exchange/:address", async (req, res) => {
-    const address = req.params.address 
-    const chain = req.params.chain
-    const exchange = req.params.exchange
+quotesRouter.get("/:chain/:exchange/:address", 
+    await rateLimitMiddleware(
+        async (req, res) => {
+            const address = req.params.address 
+            const chain = req.params.chain
+            const exchangeName = req.params.exchange.split("_")[0]
+            const exchangeVersion = req.params.exchange.split("_")[1]
+            
 
-    try{
-        // TODO: Add a section that checks if exchange name is valid
+            try{
+                // TODO: Add a section that checks if exchange name is valid
 
-        let quote, poolInfo
-        if(req.params.exchange === "uniswapV2") {
-            poolInfo = await handler_ETH.getPoolInfo_UniswapV2(address)
-            quote = await handler_ETH.getPoolPrice_UniswapV2(address, poolInfo)
+                const pair = await databaseUtils.getEntry("pairs", {
+                    blockchain:chain,
+                    contract_address:address
+                }, app.locals.dbPool)
+
+                let quote, poolInfo
+                
+                // If couldn't find the pair in the database, get the pool info from the blockchain
+                if(!pair) {
+                    poolInfo = await handler_ETH.getPoolInfo_UniswapV2(address)
+                } else {
+                    const token0 = await dbUtils.getEntry("tokens", {
+                        blockchain:chain, symbol:pair.token0
+                    }, app.locals.dbPool)
+                
+                    const token1 = await dbUtils.getEntry("tokens", {
+                        blockchain:chain, symbol:pair.token1
+                    }, app.locals.dbPool)
+
+                    if(`${exchangeName}_${exchangeVersion}` === "uniswap_V2") {
+                        poolInfo = {
+                            address: pair.pool_address,
+                            token0: {
+                                address: token0.contract_address,
+                                symbol: token0.symbol,
+                                decimals: token0.decimals,
+                            },
+                            token1: {
+                                address: token1.contract_address,
+                                symbol: token1.symbol,
+                                decimals: token1.decimals,
+                            },
+                        }
+                    }
+                }
+
+                quote = await handler_ETH.getPoolPrice_UniswapV2(address, poolInfo)
+                
+                res.json({
+                    status: "success",
+                    data: {
+                        quote: quote,
+                        chain: chain,
+                        pool_address: address,
+                        exchangeName: exchangeName,
+                        exchangeVersion: exchangeVersion
+                    }
+                })
+            } catch(err){
+                res.status(500).json({
+                    status: "error",
+                    data: {
+                        msg: `Couldn't get the quote. Error: ${err}`,
+                        params: {
+                            chain: chain,
+                            pool_address: address,
+                            exchangeName: exchangeName,
+                            exchangeVersion: exchangeVersion
+                        }
+                    }
+                })
+            }
         }
+    )
+)
 
-        res.json({
-            status: "success",
-            data: {
-                quote: quote,
-                pool_address: address,
-                exchange: exchange,
-            }
-        })
-    } catch(err){
-        res.json({
-            status: "error",
-            data: {
-                msg: `Couldn't get the quote. Error: ${err}`
-            }
-        })
-    }
-})
-
-// Start the quoteFetcher script
+// Start the quoteFetcher script as a new task
 quotesRouter.post("/quoteFetcher", async (req, res) => {
     try{
         const __filename = fileURLToPath(import.meta.url);

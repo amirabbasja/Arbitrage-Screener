@@ -4,6 +4,7 @@ import {join} from "path"
 import {getDirPath, crawler} from "../src/utils/blockchainUtils.js"
 import databaseUtils from "../src/utils/dbUtils.js"
 import {dbPool} from "../src/config/db.js"
+import {ethHandler, loadABI} from "../src/utils/blockchainUtils.js"
 
 let verbose = true
 
@@ -14,22 +15,6 @@ dotenv.config({ path: join(getDirPath(), "../../.env") })
 const crawlerHandler = new crawler(process.env.alchemy_api_key)
 const functions = Object.getOwnPropertyNames(
     Object.getPrototypeOf(crawlerHandler)).filter(item => typeof crawlerHandler[item] === 'function');
-
-// Create pairs table if doesn't exist
-if(! await databaseUtils.checkTableExists("pairs", dbPool, "public")){
-    const _query = 
-        `
-            blockchain VARCHAR(255) NOT NULL,
-            token0 VARCHAR(255) NOT NULL,
-            token1 VARCHAR(255) NOT NULL,
-            exchange VARCHAR(255) NOT NULL,
-            exchange_type VARCHAR(255) NOT NULL,
-            contract_address VARCHAR(255) NOT NULL,
-            extra_info VARCHAR(255) NOT NULL,
-            latest_quote JSONB
-        `
-    await databaseUtils.createTable("pairs", dbPool, _query)
-}
 
 // Necessary pairs and token contract addresses. Except for contract address, all should be lowercase
 const tokenContractAddresses = {
@@ -47,6 +32,31 @@ const pairs = [
     ["eth", "weth", "usdc"],
 ]
 
+// Fill up tokens table
+
+// Define the handlers
+const handler_ETH = {
+    "eth" : new ethHandler(process.env.alchemy_api_key)
+}
+
+for (const network in tokenContractAddresses) {
+    // Iterate through each token in the current network
+    for (let token in tokenContractAddresses[network]) {
+        token = await handler_ETH[network].getTokenInfo(
+            tokenContractAddresses[network][token],
+            await loadABI(join(getDirPath(), "..", "utils/ABIs/ERC20_Tokens.json")), undefined
+        )
+        
+        await databaseUtils.addRow("tokens", {
+            symbol: token.symbol.toLowerCase(),
+            blockchain: network,
+            contract_address: token.address,
+            decimals: token.decimals
+        }, dbPool)
+    }
+}
+
+// Fill up pairs table
 for(let i = 0; i < pairs.length; i++){
     const chain = pairs[i][0]
     const token0 = pairs[i][1]
