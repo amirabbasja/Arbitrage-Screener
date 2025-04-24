@@ -6,10 +6,68 @@
     <title>Arbitrager 1.0</title>
 </head>
 <body>
+
     <!-- Include the top menu script -->
     <script src="./scripts/include-top-panel.js" type="module"></script>
 
     <!-- Load the script to fill body with tables -->
     <script src="./scripts/script.js" type="module"></script>
+
+    <!-- Make the websocket instance -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        function highlightCell(cell) {
+            // Remove any existing highlight classes
+            cell.classList.remove('highlight-change');
+            
+            // Force a reflow to ensure the animation triggers again
+            void cell.offsetWidth;
+            
+            // Add the highlight class to start the animation
+            cell.classList.add('highlight-change');
+        }
+
+        // Function to update a cell and apply the highlight effect
+        function updateCellWithHighlight(cellElement, newValue) {
+            // Only highlight if the value actually changed
+            if (cellElement.textContent !== newValue.toString()) {
+                cellElement.textContent = newValue;
+                highlightCell(cellElement);
+            }
+        }
+
+        function formatNumber(num) {
+            // If the number is zero, return it as is
+            if (num === 0) return '0';
+            
+            // Get the absolute value to handle negative numbers
+            const absNum = Math.abs(num);
+            
+            // Check if the number is very small (less than 0.0001)
+            if (absNum < 0.0001) {
+                // Use scientific notation with 4 significant digits
+                return num.toExponential(3); // 3 decimal places + 1 digit before decimal = 4 significant digits
+            } else {
+                // For regular numbers, use toFixed to get 4 decimal places
+                return parseFloat(num.toFixed(4)).toString();
+            }
+        }
+        const socket = io(); // Connect to the Socket.IO server
+
+        socket.on('table_update', (data) => {
+            const element = document.getElementById(`${data.new_data.blockchain}_${data.new_data.contract_address}`);
+            // updateCellWithHighlight(cellElement, formatNumber(data.new_data.latest_quote.price))
+
+            if(formatNumber(data.new_data.latest_quote.price) !== element.innerText){
+                element.innerText = formatNumber(data.new_data.latest_quote.price)
+                highlightCell(element);
+            }
+        });
+
+        // socket.on('error', (error) => {
+        //     console.error('WebSocket error:', error);
+        // })
+
+    </script>
 </body>
 </html>

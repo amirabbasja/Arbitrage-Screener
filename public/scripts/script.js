@@ -1,11 +1,3 @@
-function formatNumber(num) {
-    if (num >= 1) {
-        return Number(num.toFixed(3));
-    } else {
-        return num.toExponential(3);
-    }
-}
-
 /**
  * Groups objects in an array based on two matching properties
  * @param {Array} array - Array of objects to batch
@@ -33,6 +25,10 @@ function batchObjectsByProperties(array, prop1, prop2) {
     return Array.from(batches.values());
 }
 
+/**
+ * Makes the necessary tables in html so that they can later be populated 
+ * with quotes
+ */
 async function populatePairTables() {
     // Make the request to get all the table "pairs" as a big JSON object
     const response = await (await fetch("/pairs")).json()
@@ -63,7 +59,7 @@ async function populatePairTables() {
         for(let j = 0; j < assets[i].length; j++){
             tableHtml += `
             \t\t<td id="${assets[i][j].blockchain}_${assets[i][j].exchange}_${assets[i][j].exchange_type}_${assets[i][0].token0.toUpperCase()}${assets[i][0].token1.toUpperCase()}">
-                <span id-"${assets[i][j].contract_address}">NAN</span>
+                <span id="${assets[i][j].blockchain}_${assets[i][j].contract_address}">NAN</span>
             </td>\n
             `
         }
@@ -79,22 +75,9 @@ async function populatePairTables() {
     console.log("finished")
 }
 
-async function tmpFcn(){
-    const cell = document.getElementById("eth_uniswap_v2_ETHUSDT")
-    const url = `http://localhost:3000/quote/eth/uniswapV2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
-
-    const response = await (await fetch(url)).json()
-    const data = response.data
-    let quote = "----"
-
-    if (response.status === "success") {
-        quote = formatNumber(data.quote.price)
-    }
-
-    cell.textContent = quote
-}
-
-// Updates the quotes of the main page by running the quoteFetcher.js script.
+/**
+ * Updates the quotes of the main page by running the quoteFetcher.js script.
+ */
 async function updateQuotes(){
     const activationBtn = document.getElementById("activation-btn")
 
@@ -130,6 +113,16 @@ async function updateQuotes(){
     })
 }
 
+/**
+ * By always checking the database, it updates the table cells with new quotes
+ */
+async function quotesUpdater() {
+    
+}
+
+/**
+ * Checks if the quote fetcher script is running or not, If so, change the button style
+ */
 async function startBtnLoad(){
     const response = await (await fetch("/quote/quoteFetcher")).json()
     const data = response.data
@@ -147,4 +140,5 @@ async function startBtnLoad(){
 
 document.addEventListener("topMenuLoaded", updateQuotes)
 window.addEventListener('load', populatePairTables)
+window.addEventListener("load", quotesUpdater)
 window.addEventListener("load", startBtnLoad)

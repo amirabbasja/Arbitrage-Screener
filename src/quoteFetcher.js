@@ -2,6 +2,7 @@
 import { ConnectionCloseError } from "web3";
 import {app} from "./app.js"
 import databaseUtils from "./utils/dbUtils.js"
+import { start } from "repl";
 
 /**
  * Batches objects in an array based on a specified property
@@ -26,11 +27,11 @@ function batchByProperty(array, property) {
 }
 
 /**
- * 
- * @param {Array} delays - An array representing delay of each function
+ * Sets up intervals for each loop
+ * @param {Array} delays - An array representing delay of each function (In ms)
  * @param {Array} tasks - An array representing the functions to run
  */
-function setupLoops(delays, tasks) {
+async function setupLoops(delays, tasks) {
     // Ensure each function has a delay
     if (delays.length !== tasks.length) {
         throw new Error("Number of delays and tasks must be equal.");
@@ -80,7 +81,7 @@ async function requestSender(pairs){
                         contract_address: response.data.params.pool_address,
                     },
                     {
-                        latest_quote: {price: "NAN", timestamp: Date.now()}
+                        latest_quote: {price: "ERR", timestamp: Date.now()}
                     }
                 )
             }
@@ -97,10 +98,10 @@ async function printMessage() {
         // Get all pairs that need to be fetched
         let pairs = await databaseUtils.getTableAsJson("pairs", app.locals.dbPool)
         pairs = batchByProperty(pairs, "blockchain")
-        const a = requestSender(pairs["eth"])
-        console.log("aaaa")
 
+        const ethCatcher = () => requestSender(pairs["eth"])
 
+        await setupLoops([10000], [ethCatcher])
 
 
         // const _host = process.env.app_host
@@ -162,7 +163,7 @@ async function printMessage() {
         //     }
         // }
         
-        setTimeout(printMessage, 5000)
+        // setTimeout(printMessage, 5000)
     }catch(err){
         console.log(err)
     }

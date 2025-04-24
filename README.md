@@ -16,15 +16,17 @@
 
 7. Install *bottleneck* package for limiting the request rate to RPCs
 
+8. Install *socket.io* package for real-time updates UI via websockets
+
 ---
 
 ## How to work with this app
 
 * Populate the **.env** file with necessary data regarding your database. We have used **postgreql** in this project. To get the necessary variable names, check **.env_EXAMPLE** file
 
-* All RPCs have a rate-limit. To abide by the rate-limit rules of teh RPCs, we have implemented a bottleneck that servers as a middleware which all the outgoing requests are gone through it. Each RPC will have its own *Bottleneck* instance which can be configured in **/src/utils.requestLimiter.js**
+* All RPCs have a rate-limit. To abide by the rate-limit rules of teh RPCs, we have implemented a bottleneck that servers as a middleware which all the outgoing requests are gone through it. Each RPC will have its own *Bottleneck* instance which can be configured in **/src/utils/requestLimiter.js**
 
-* When running the app for the first time first run the **./install/setupTables.js** file to create the necessary tables in the database, then run the **./install/getPools.js** file to populate the table **pairs** and **tokens** tables. (Will create this table if doesn't exist) with contract addresses for pools in various blockchains and pairs. Note that this file needs you to input two constants so it would run properly, **1. pairs** which stores which pairs we need to look for on what blockchain, and **2. tokenContractAddresses** which stores the contract addresses of the tokens that are in previously defined, pairs object. An example for each variable is added below:
+* When running the app for the first time first run the **./install/setupTables.js** file to create the necessary tables in the database, After that, rin **./install/setupFunctions.js** to make the necessary postgreql functions and notifications. Then run the **./install/getPools.js** file to populate the table **pairs** and **tokens** tables (Will create this table if doesn't exist) with contract addresses for pools in various blockchains and pairs. Note that this file needs you to input two constants so it would run properly, **1. pairs** which stores which pairs we need to look for on what blockchain, and **2. tokenContractAddresses** which stores the contract addresses of the tokens that are in previously defined, pairs object. An example for each variable is added below:
 
 ```javascript
         const tokenContractAddresses = {
@@ -68,6 +70,12 @@ A class that is tasked with getting quotes in ethereum blockchain
 A class that is tasked with getting trading pair contract addresses for different chains and exchanges
 
 ---
+
+## Technical notes
+
+1. All the data is stored in a database. The database is called **arbitrageDB**. The table for pairs is called **pairs** and the table for tasks (Functions getting the quotes from the blockchain) is called **tasks**.
+
+2. The UI updates using a websocket. The websocket is listening to database notifications and updates the UI accordingly. Each time table pairs is updated, deleted, or inserted, postgreql will emit a notification that will be picked up by the websocket server.
 
 ## TODOs
 

@@ -3,10 +3,15 @@ import {fileURLToPath} from "url"
 import {dirname, join} from "path"
 import dotenv from "dotenv"
 import clipboardy from "clipboardy"
-import Web3 from 'web3'
+import Web3, { ERR_TX_GAS_MISMATCH } from 'web3'
 import databaseUtils from "./dbUtils.js"
+import { app } from "../app.js"
+import e from "express"
 
 
+/**=============================================================== */
+/**================ General utility functions /**=================*/
+/**=============================================================== */
 /**
  * Reads a JSON file, prettifies it, and copies it to the clipboard
  * @param {string} filePath - Absolute path to the JSON file from base directory
@@ -41,7 +46,6 @@ const prettifyAndCopyJson = async (filePath) => {
     }
 }
 
-/** General utility functions */
 /**
  * Gets directory of the current file
  * @returns {string} - Returns the directory of the current file
@@ -75,17 +79,29 @@ async function loadABI(filePath) {
     }
 }
 
+
+/**=============================================================== */
+/**==================== Blockchain handlers ====================== */
+/**=============================================================== */
 /** Class that helps with interaction with ethereum mainnet using alchemy */
 class ethHandler{
     /**
      * Creates an instance of ethHandler class which helps with interaction 
-     * with ethereum mainnet using alchemy.
+     * with ethereum mainnet using alchemy. Methods in the following class consist
+     * of 3 types, general functions which don't have any pattern in their name,
+     * and functions that are for interacting with DEXs, which are divided into two
+     * parts. Functions that get the information of the pool which have the 
+     * following name pattern: getPoolInfo_<ExchangeName>_<ExchangeVersion> and,
+     * the functions that get quote of the pool which have the following format:
+     * getPoolPrice_<ExchangeName>_<ExchangeVersion>
      * @param {string} apiKey - Your Alchemy API key.
+     * @param {Object} dbPool - PostgreSQL connection pool (Optional)
      */
-    constructor(apiKey){
+    constructor(apiKey, dbPool){
         this.apiKey = apiKey
         this.baseURL = `https://eth-mainnet.g.alchemy.com/v2/${apiKey}`
         this.web3 = new Web3(`https://eth-mainnet.g.alchemy.com/v2/${apiKey}`)
+        this.dbPool = dbPool
     }
 
     /**
@@ -162,7 +178,7 @@ class ethHandler{
      *  if checkDB is defined.
      * @param {object} ERC20_ABI - The ABI of the ERC20 token. Can be undefined 
      *  if checkDB is defined.
-     * @param {object} checkDB - An object for search information of the token.
+     * @param {object} checkDB - An object to search information of the token.
      *  It should have the table name in "table" key, blockchain name is also 
      *  mandatory under the key "blockchain". An instance of postgreql pool should
      *  be passed under the key "pool". To search, one of the keys "symbol" or 
@@ -179,11 +195,12 @@ class ethHandler{
         if (checkDB){
             if(checkDB.table === undefined){ throw new Error("Table name not defined") }
             if(checkDB.blockchain === undefined){ throw new Error("Blockchain name not defined") }
-            if(checkDB.pool === undefined){ throw new Error("Pool not defined") }
+            if(checkDB.pool === undefined){ throw new Error("Database pool not defined") }
             if(checkDB.symbol === undefined && checkDB.contract_address === undefined){ throw new Error("Symbol or contract address not defined") }
             
             const condition = checkDB.symbol ? {symbol: checkDB.symbol} : {contract_address: checkDB.contract_address}
             const tokenData = await databaseUtils.getEntry(checkDB.table, condition, checkDB.pool)
+            console.log(tokenData)
             
             if(tokenData){
                 _tokenAddress = tokenData.contract_address
@@ -212,13 +229,140 @@ class ethHandler{
     }
 
     /**
+     * Gets the information about a pool from database.
+     * @param {String} address - The address of the pool
+     * @param {String} blockchain - The name of the blockchain
+     * @param {object} dbPool - A Postgreql database pool object
+     * @param {array} necessaryFields - The name of the fields that are necessary to 
+     *  return, else, It will return null
+     * @returns 
+     */
+    async getPoolInfo_offline(address, blockchain, dbPool, necessaryFields) {
+        const result = await databaseUtils.getEntry("pairs", {contract_address: address, blockchain: blockchain}, dbPool)
+        const objKeys = Object.keys(result)
+
+        if(!result){
+            return null
+        }
+
+        if(!necessaryFields.every(key => objKeys.includes(key))){
+            return null
+        }
+
+        return result
+    }
+
+    /***************************************************
+     ******************* Uniswap V2 ********************
+     ***************************************************/
+
+    /**
      * Gets a uniswap V2's pool information
      * @param {string} poolAddress - The address of the uniswap V2 pool
      * @returns {object} An object resembling the pool's information
      */
-    async getPoolInfo_UniswapV2(poolAddress){
+    async getPoolInfo_uniswap_V2(poolAddress){
       // Fetch ABIs
         const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV2.json"))
+        const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+
+        // Create contract instance
+        const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+
+        // Get token addresses
+        const token0Address = await poolContract.methods.token0().call()
+        const token1Address = await poolContract.methods.token1().call()
+
+        // Get token information
+        const token0 = await this.getTokenInfo(token0Address, ERC20_ABI)
+        const token1 = await this.getTokenInfo(token1Address, ERC20_ABI)
+
+        return {
+            address: poolAddress,
+            token0: token0, // Symbol, contract_address, decimals
+            token1: token1 // Symbol, contract_address, decimals
+        }
+    }
+
+    /**
+     * Gets current pool price of a uniswap pool by its reserves.
+     * @param {string} poolAddress - The address of the uniswap V2 pool
+     *  namely, its address, symbol and decimals.
+     * @returns {object} Pool's reserves and symbol for each token, and calculated price
+     */
+    async getPoolPrice_uniswap_V2(poolAddress){
+        // Fetch ABIs
+        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV2.json"))
+        const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+        if(this.dbPool === undefined){ throw new Error("Database pool not defined") }
+
+        const result = await this.getPoolInfo_offline(poolAddress, "eth", this.dbPool, ["token0", "token1", "contract_address", "token0_address", "token1_address", "token1_address"])
+        console.log(result.token0_address, result.token1_address)
+        const token0_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token0_address,
+        })
+
+        const token1_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token1_address,
+        })
+
+        if(result && token0_Info && token1_Info){
+            const poolInfo = {
+                address: result.contract_address,
+                token0: token0_Info,
+                token1: token1_Info,
+            }
+
+            // Create contract instance
+            const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+            
+            // Get pool reserves
+            const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
+
+            // Calculate the pool price
+            const divisor0 = 10n ** BigInt(poolInfo.token0.decimals)
+            const divisor1 = 10n ** BigInt(poolInfo.token1.decimals)
+
+            const reserve0 = parseFloat(String(_reserve0)) / parseFloat(String(divisor0))
+            const reserve1 = parseFloat(String(_reserve1)) / parseFloat(String(divisor1))
+
+            const poolPrice = reserve0 / reserve1
+
+            return {
+                token0: {
+                    symbol: poolInfo.token0.symbol,
+                    reserve: reserve0,
+                },
+                token1: {
+                    symbol: poolInfo.token1.symbol,
+                    reserve: reserve1,
+                },
+                price: poolPrice
+            }
+        }else{
+            return null
+        }
+    }
+
+
+    /***************************************************
+     ******************* Uniswap V3 ********************
+     ***************************************************/
+
+    /**
+     * Gets a uniswap V3's pool information
+     * @param {string} poolAddress - The address of the uniswap V3 pool
+     * @returns {object} An object resembling the pool's information
+     */
+    async getPoolInfo_uniswap_V3(poolAddress){
+        // Fetch ABIs
+        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV3Pool_ETH.json"))
         const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
 
         // Create contract instance
@@ -239,22 +383,42 @@ class ethHandler{
         }
     }
 
-
     /**
      * Gets current pool price of a uniswap pool by its reserves.
-     * @param {string} poolAddress - The address of the uniswap V2 pool
+     * @param {string} poolAddress - The address of the uniswap V3 pool
      * @param {object} poolInfo - An object resembling each token's info in the pool
      *  namely, its address, symbol and decimals.
      * @returns {object} Pool's reserves and symbol for each token, and calculated price
      */
-    async getPoolPrice_UniswapV2(poolAddress, poolInfo){
-      // Fetch ABIs
-        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV2.json"))
+    async getPoolPrice_uniswap_V3(poolAddress, poolInfo){
+        function calculatePriceFromSqrtPriceX96(sqrtPriceX96, decimals0, decimals1) {
+            // Convert sqrtPriceX96 to a BigNumber
+            const sqrtPriceBN = ethers.BigNumber.from(sqrtPriceX96);
+            
+            // Calculate price = (sqrtPriceX96 / 2^96) ^ 2
+            const Q96 = ethers.BigNumber.from(2).pow(96);
+            
+            // First divide by 2^96
+            const sqrtPrice = sqrtPriceBN.mul(ethers.BigNumber.from(10).pow(18)).div(Q96);
+            
+            // Then square it and adjust for decimals
+            const price = sqrtPrice.mul(sqrtPrice)
+                .div(ethers.BigNumber.from(10).pow(18))
+                .mul(ethers.BigNumber.from(10).pow(decimals0))
+                .div(ethers.BigNumber.from(10).pow(decimals1));
+            
+            // Convert to a JavaScript number for easier display
+            return parseFloat(ethers.utils.formatUnits(price, decimals0));
+        }
+
+
+        // Fetch ABIs
+        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV3Pool_ETH.json"))
         const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
 
         // Create contract instance
         const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
-        
+
         // Get pool reserves
         const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
 
@@ -278,6 +442,68 @@ class ethHandler{
             },
             price: poolPrice
         }
+}
+
+    /*****************************************************
+     ******************* Sushiswap V2 ********************
+     *****************************************************/
+
+    
+    /**
+     * Gets a sushiswap V2's pool information
+     * @param {string} poolAddress - The address of the sushiswap V2 pool
+     * @returns {object} An object resembling the pool's information
+     */
+    async getPoolInfo_sushiswap_V2(poolAddress){
+        // Fetch ABIs
+        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/sushiswapV2Pool_ETH.json"))
+        const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+
+        // Create contract instance
+        const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+
+        // Get token addresses
+        const token0Address = await poolContract.methods.token0().call()
+        const token1Address = await poolContract.methods.token1().call()
+
+        // Get token information
+        const token0 = await this.getTokenInfo(token0Address, ERC20_ABI)
+        const token1 = await this.getTokenInfo(token1Address, ERC20_ABI)
+
+        return {
+            address: poolAddress,
+            token0: token0,
+            token1: token1
+        }
+    }
+
+    
+    /**
+     * Gets a sushiswap V3's pool information
+     * @param {string} poolAddress - The address of the sushiswap V3 pool
+     * @returns {object} An object resembling the pool's information
+     */
+    async getPoolInfo_sushiswap_V3(poolAddress){
+        // Fetch ABIs
+        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/sushiswapV3Pool_ETH.json"))
+        const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+
+        // Create contract instance
+        const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+
+        // Get token addresses
+        const token0Address = await poolContract.methods.token0().call()
+        const token1Address = await poolContract.methods.token1().call()
+
+        // Get token information
+        const token0 = await this.getTokenInfo(token0Address, ERC20_ABI)
+        const token1 = await this.getTokenInfo(token1Address, ERC20_ABI)
+
+        return {
+            address: poolAddress,
+            token0: token0,
+            token1: token1
+        }
     }
 }
 
@@ -294,13 +520,25 @@ class crawler{
         this.apiKey = apiKey
         this.baseURL = `https://eth-mainnet.g.alchemy.com/v2/${apiKey}`
         this.web3 = new Web3(`https://eth-mainnet.g.alchemy.com/v2/${apiKey}`)
+        
+        // Blockchain handlers
+        this.ethHandler = new ethHandler(this.apiKey)
 
-        // Factory addresses
+        // Uniswap
         this.uniswap_v2_factory_address_ETH = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
         this.uniswap_v3_factory_address_ETH = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+
+        // Sushiswap
         this.sushiswap_v2_factory_address_ETH = "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+        this.sushiswap_v3_factory_address_ETH = "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F"
+
+        // Curve Protocol
         this.curveProtocol_registry_address_ETH = "0x90E00ACe148ca3b23Ac1bC8C240C2a7Dd9c2d7f5"
+        this.curveProtocol_meta_pool_factory_address_ETH = "0xB9fC157394Af804a3578134A6585C0dc9cc990d4"
+        this.curveProtocol_crypto_pools_registry_address_ETH = "0x8F942C20D02bEfc377D41445793068908E2250D0"
+        this.curveProtocol_crypto_factory_address_ETH = "0xF18056Bbd320E96A48e3Fbf8bC061322531aac99"
     }
+
 
     /**
      * Gets all possible trading pairs from Uniswap V2 and V3 on ethereum mainnet
@@ -347,7 +585,7 @@ class crawler{
                 }
 
                 if (pools.length === 0) {
-                    
+                    return []
                 }
                 
                 return pools
@@ -359,13 +597,17 @@ class crawler{
         try {
             // Fetch pools
             const allPools = []
-            const v2Pool = await getV2Pool(token0Address, token1Address)
+            const v2Pool  = await getV2Pool(token0Address, token1Address)
             const v3Pools = await getV3Pool(token0Address, token1Address)
-            
+            let tempInfo
+
             if(v2Pool){
+                tempInfo = await this.ethHandler.getPoolInfo_uniswap_V2(v2Pool)
                 allPools.push({
                     exchange: "uniswap",
                     address: v2Pool,
+                    tokens: [tempInfo.token0.symbol, tempInfo.token1.symbol],
+                    tokens_addresses: [tempInfo.token0.address, tempInfo.token1.address],
                     type: 'V2',
                     extraInfo: `-`,
                 })
@@ -373,9 +615,12 @@ class crawler{
 
             if(v3Pools){
                 for(const pool of v3Pools){
+                    tempInfo = await this.ethHandler.getPoolInfo_uniswap_V3(pool.address)
                     allPools.push({
                         exchange: "uniswap",
                         address: pool.address,
+                        tokens: [tempInfo.token0.symbol, tempInfo.token1.symbol],
+                        tokens_addresses: [tempInfo.token0.address, tempInfo.token1.address],
                         type: 'V3',
                         extraInfo: `fee:${pool.fee}`,
                     })
@@ -405,10 +650,11 @@ class crawler{
     async sushiswapCrawler_ETH(token0Address, token1Address){
         // Load ABIs
         const sushiswapV2Factory_ABI = await loadABI(join(getDirPath(), "./ABIs/sushiswapV2Factory_ETH.json"))
+        const sushiswapV3Factory_ABI = await loadABI(join(getDirPath(), "./ABIs/sushiswapV3Factory_ETH.json"))
 
         // Contracts
         const sushiV2Factory = new this.web3.eth.Contract(sushiswapV2Factory_ABI, this.sushiswap_v2_factory_address_ETH)
-
+        const sushiV3Factory = new this.web3.eth.Contract(sushiswapV3Factory_ABI, this.sushiswap_v3_factory_address_ETH)
         async function getV2Pool(token0Address, token1Address) {
             try {
                 const pairAddress = await sushiV2Factory.methods.getPair(token0Address, token1Address).call()
@@ -422,18 +668,61 @@ class crawler{
             }
         }
 
+        async function getV3Pool(token0Address, token1Address) {
+            // Sushiswap V3 has multiple fee tiers: 0.05% (500), 0.3% (3000), and 1% (10000)
+            const feeTiers = [500, 3000, 10000]
+            const pools = []
+
+            try {
+                for (const fee of feeTiers) {
+                    const poolAddress = await sushiV3Factory.methods.getPool(token0Address, token1Address, fee).call()
+                    
+                    if (poolAddress && poolAddress !== '0x0000000000000000000000000000000000000000') {
+                        pools.push({ fee, address: poolAddress })
+                    }
+                }
+
+                if (pools.length === 0) {
+                    return []
+                }
+                
+                return pools
+            } catch (error) {
+                return null
+            }
+        }
+
         try {
             // Fetch pools
             const allPools = []
             const v2Pool = await getV2Pool(token0Address, token1Address)
+            const v3Pool = await getV3Pool(token0Address, token1Address)
+            let tempInfo
             
             if(v2Pool){
+                tempInfo = await this.ethHandler.getPoolInfo_sushiswap_V2(v2Pool)
                 allPools.push({
                     exchange: "sushiswap",
                     address: v2Pool,
+                    tokens: [tempInfo.token0.symbol, tempInfo.token1.symbol],
+                    tokens_addresses: [tempInfo.token0.address, tempInfo.token1.address],
                     type: 'V2',
                     extraInfo: `-`,
                 })
+            }
+            
+            if(v3Pool){
+                for(const pool of v3Pool){
+                    tempInfo = await this.ethHandler.getPoolInfo_sushiswap_V3(pool.address)
+                    allPools.push({
+                        exchange: "sushiswap",
+                        address: pool.address,
+                        tokens: [tempInfo.token0.symbol, tempInfo.token1.symbol],
+                        tokens_addresses: [tempInfo.token0.address, tempInfo.token1.address],
+                        type: 'V3',
+                        extraInfo: `fee:${pool.fee}`,
+                    })
+                }
             }
 
             if(allPools.length === 0){
@@ -459,40 +748,66 @@ class crawler{
      */
     async curveProtocolCrawler_ETH(token0Address, token1Address){
         // Load ABIs
-        const curveProtocolFactory_ABI = await loadABI(join(getDirPath(), "./ABIs/curveRegistry_ETH.json"))
+        const curveProtocolRegistry_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolRegistry_ETH.json"))
+        const curveProtocolMetaPoolFactory_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolMetaPoolFactory_ETH.json"))
+        const curveProtocolCryptoPoolsRegistry_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolCryptoPoolsRegistry_ETH.json"))
+        const curveProtocolCryptoFactory_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolFactory_ETH.json"))
 
         // Contracts
-        const curveRegistry = new this.web3.eth.Contract(curveProtocolFactory_ABI, this.curveProtocol_registry_address_ETH)
+        const curveRegistry = new this.web3.eth.Contract(curveProtocolRegistry_ABI, this.curveProtocol_registry_address_ETH)
+        const curveMetaPool = new this.web3.eth.Contract(curveProtocolMetaPoolFactory_ABI, this.curveProtocol_meta_pool_factory_address_ETH)
+        const cryptoPoolsRegistry = new this.web3.eth.Contract(curveProtocolCryptoPoolsRegistry_ABI, this.curveProtocol_crypto_pools_registry_address_ETH)
+        const cryptoFactory = new this.web3.eth.Contract(curveProtocolCryptoFactory_ABI, this.curveProtocol_crypto_factory_address_ETH)
+        const contracts = [curveRegistry, curveMetaPool, cryptoPoolsRegistry, cryptoFactory]
 
         async function getPools(token0Address, token1Address) {
+            const pools = []
             try {
-                const pairAddress = await curveRegistry.methods.find_pool_for_coins(token0Address, token1Address).call()
-                
-                // Check if the pair exists (not zero address)
-                if (pairAddress !== '0x0000000000000000000000000000000000000000') {
-                    const poolName = await curveRegistry.methods.get_pool_name(pairAddress).call()
-                    const isMeta = await curveRegistry.methods.is_meta(pairAddress).call()
-                    return {pairAddress, poolName, isMeta}
+                for (let j = 0; j < contracts.length; j++) {
+                    const contract = contracts[j]
+                    const pairAddress = await contract.methods.find_pool_for_coins(token0Address, token1Address).call()
+
+                    // Check if the pair exists (not zero address)
+                    if (pairAddress !== '0x0000000000000000000000000000000000000000') {
+                        let poolName = undefined
+                        let coins = undefined
+                        try{poolName = await contract.methods.get_pool_name(pairAddress).call()} catch {poolName = null}
+                        try{coins = await contract.methods.get_coins(pairAddress).call()} catch {coins = null}
+                        
+
+                        pools.push(
+                            {   
+                                pairAddress: pairAddress, 
+                                poolName: poolName || "unknown", 
+                                coins: coins.map(c => c !== '0x0000000000000000000000000000000000000000' ? c : null)
+                            }
+                        )
+                    }
                 }
-                return {pairAddress: null, poolName: null, isMeta:null}
+
+                return pools
             } catch (error) {
-                return {pairAddress: null, poolName: null, isMeta:null}
+                console.log(error)
+                return []
             }
         }
 
         try {
             // Fetch pools
             const allPools = []
-            const {pairAddress, poolName, isMeta} = await getPools(token0Address, token1Address)
+            const pools = await getPools(token0Address, token1Address)
+            let tempInfo
             
-            if(pairAddress){
+            for(const pool in pools){
+                const {pairAddress, poolName, coins} = pools[pool]
                 allPools.push({
                     exchange: "curveProtocol",
                     address: pairAddress,
                     type: poolName,
-                    extraInfo: `isMeta:${isMeta}`,
+                    extraInfo: {coins:coins},
                 })
             }
+
             if(allPools.length === 0){
                 return {"msg": "No pools found"}
             }else{
@@ -507,14 +822,23 @@ class crawler{
 
 // prettifyAndCopyJson(join(getDirPath(), "ABIs/uniswapV2Factory.json"))
 
-// // Get the api key from the .env file
-// dotenv.config({ path: join(getDirPath(), "../../.env") })
+// Get the api key from the .env file
+dotenv.config({ path: join(getDirPath(), "../../.env") })
 
-// const crawlerHandler = new crawler(process.env.alchemy_api_key)
-// const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
-// const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
-// const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f"
-// console.log(await crawlerHandler.curveProtocolCrawler_ETH(WETH, USDT))
+const crawlerHandler = new crawler(process.env.alchemy_api_key)
+const _ethHandler = new ethHandler(process.env.alchemy_api_key)
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
+const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
+const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f"
+const poolV3 = "0xC4ce8E63921b8B6cBdB8fCB6Bd64cC701Fb926f2"
+const poolV2 = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
+const sushiV2Pool = "0xC40D16476380e4037e6b1A2594cAF6a6cc8Da967"
+const sushiV3Pool = "0x01b94ac1abf25c132bced6918513f1822d0dc52f"
+
+// console.log(await _ethHandler.getPoolInfo_offline("0x72c2178E082feDB13246877B5aA42ebcE1b72218", "eth", app.locals.dbPool, ["contract_address", "token0", "token1"]))
+// console.log(await _ethHandler.getPoolInfo_sushiswap_V2(sushiV3Pool))
+// const v = await crawlerHandler.sushiswapCrawler_ETH(WETH, USDT)
+// console.log(v)
 
 export{
     loadABI,

@@ -1,4 +1,4 @@
-// Gets available pairs in database
+// Gets available pairs in database, including their quotes
 
 import express from "express"
 import databaseUtils from "../utils/dbUtils.js"
@@ -28,4 +28,3 @@ pairsRouter.get("/", async (req, res) => {
 })
 
 export {pairsRouter}
-

@@ -24,6 +24,47 @@ table {
     font-family: 'Roboto Slab', serif;
 }
 
+.highlight-change {
+    animation: highlight-fade 1.5s ease-out;
+}
+
+@keyframes highlight-fade {
+    0% {
+        background-color: rgba(38, 179, 57, 0.7); /* Yellow highlight */
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+/* For positive changes (optional) */
+.highlight-positive {
+    animation: highlight-positive 1.5s ease-out;
+}
+
+@keyframes highlight-positive {
+    0% {
+        background-color: rgba(0, 255, 0, 0.5); /* Green highlight */
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+/* For negative changes (optional) */
+.highlight-negative {
+    animation: highlight-negative 1.5s ease-out;
+}
+
+@keyframes highlight-negative {
+    0% {
+        background-color: rgba(43, 122, 175, 0.5); /* Red highlight */
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
 
 /* Top pane style */
 

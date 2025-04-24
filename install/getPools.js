@@ -5,8 +5,13 @@ import {getDirPath, crawler} from "../src/utils/blockchainUtils.js"
 import databaseUtils from "../src/utils/dbUtils.js"
 import {dbPool} from "../src/config/db.js"
 import {ethHandler, loadABI} from "../src/utils/blockchainUtils.js"
+import Web3 from "web3"
 
 let verbose = true
+
+// IMPORTANT
+const web3 = new Web3();
+const toCheckSum = (address) => web3.utils.toChecksumAddress(address) // Only use for EVM chains
 
 // Get the api key from the .env file
 dotenv.config({ path: join(getDirPath(), "../../.env") })
@@ -19,10 +24,10 @@ const functions = Object.getOwnPropertyNames(
 // Necessary pairs and token contract addresses. Except for contract address, all should be lowercase
 const tokenContractAddresses = {
     "eth":{
-        "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-        "usdt": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-        "dai": "0x6b175474e89094c44da98b954eedeac495271d0f",
-        "usdc": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "weth": toCheckSum("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
+        "usdt": toCheckSum("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+        "dai": toCheckSum("0x6b175474e89094c44da98b954eedeac495271d0f"),
+        "usdc": toCheckSum("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
     }
 }
 
@@ -33,26 +38,27 @@ const pairs = [
 ]
 
 // Fill up tokens table
-
 // Define the handlers
-const handler_ETH = {
+const handlers = {
     "eth" : new ethHandler(process.env.alchemy_api_key)
 }
 
 for (const network in tokenContractAddresses) {
     // Iterate through each token in the current network
     for (let token in tokenContractAddresses[network]) {
-        token = await handler_ETH[network].getTokenInfo(
+        token = await handlers[network].getTokenInfo(
             tokenContractAddresses[network][token],
             await loadABI(join(getDirPath(), "..", "utils/ABIs/ERC20_Tokens.json")), undefined
         )
         
-        await databaseUtils.addRow("tokens", {
-            symbol: token.symbol.toLowerCase(),
-            blockchain: network,
-            contract_address: token.address,
-            decimals: token.decimals
-        }, dbPool)
+        if(!await databaseUtils.getEntry("tokens", {symbol: token.symbol.toLowerCase(), blockchain: network}, dbPool)){
+            await databaseUtils.addRow("tokens", {
+                symbol: token.symbol.toLowerCase(),
+                blockchain: network,
+                contract_address: token.address,
+                decimals: token.decimals
+            }, dbPool)
+        }
     }
 }
 
@@ -70,7 +76,6 @@ for(let i = 0; i < pairs.length; i++){
             for(let j = 0; j < functions.length; j++){
                 if(functions[j].includes("_ETH")){
                     const exchangeName = functions[j].split("_")[0].replace("Crawler", "") // Get the exchange name
-
                     const poolInfo = await crawlerHandler[functions[j]](token0Address, token1Address)
 
                     // If errors occurred or no pools were found, the returned object should have a msg key
@@ -93,9 +98,14 @@ for(let i = 0; i < pairs.length; i++){
 
                         if (!(condition1 || condition2)){
                             for(let k = 0; k < poolInfo.length; k++){
+                                // Some exchanges have different names for token0 and token1, or don't provide them. 
+                                // We handle that here. If token0 and token1 are not provided, we assume the for loop's
+                                // token0 and token1, else, we use the poolInfo's token0 and token1
                                 const result = await databaseUtils.addRow("pairs", {
-                                    token0:token0,
-                                    token1:token1,
+                                    token0:poolInfo[k].tokens ? poolInfo[k].tokens[0].toLowerCase() : token0.toLowerCase(),
+                                    token1:poolInfo[k].tokens ? poolInfo[k].tokens[1].toLowerCase() : token0.toLowerCase(),
+                                    token0_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[0] : token0Address,
+                                    token1_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[1] : token1Address,
                                     blockchain:chain,
                                     exchange:exchangeName,
                                     exchange_type:poolInfo[k].type,

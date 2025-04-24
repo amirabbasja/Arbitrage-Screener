@@ -16,6 +16,8 @@ if(! await databaseUtils.checkTableExists("pairs", dbPool, "public")){
             blockchain VARCHAR(255) NOT NULL,
             token0 VARCHAR(255) NOT NULL,
             token1 VARCHAR(255) NOT NULL,
+            token0_address VARCHAR(255) NOT NULL,
+            token1_address VARCHAR(255) NOT NULL,
             exchange VARCHAR(255) NOT NULL,
             exchange_type VARCHAR(255) NOT NULL,
             contract_address VARCHAR(255) NOT NULL,
@@ -47,7 +49,7 @@ if(! await databaseUtils.checkTableExists("tokens", dbPool, "public")){
             blockchain VARCHAR(50) NOT NULL,
             contract_address VARCHAR(255) NOT NULL,
             decimals INT NOT NULL,
-            extra_info TEXT
+            extra_info JSONB
         `
     await databaseUtils.createTable("tokens", dbPool, _query)
 }
