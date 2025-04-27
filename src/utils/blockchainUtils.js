@@ -200,7 +200,6 @@ class ethHandler{
             
             const condition = checkDB.symbol ? {symbol: checkDB.symbol} : {contract_address: checkDB.contract_address}
             const tokenData = await databaseUtils.getEntry(checkDB.table, condition, checkDB.pool)
-            console.log(tokenData)
             
             if(tokenData){
                 _tokenAddress = tokenData.contract_address
@@ -297,7 +296,7 @@ class ethHandler{
         if(this.dbPool === undefined){ throw new Error("Database pool not defined") }
 
         const result = await this.getPoolInfo_offline(poolAddress, "eth", this.dbPool, ["token0", "token1", "contract_address", "token0_address", "token1_address", "token1_address"])
-        console.log(result.token0_address, result.token1_address)
+
         const token0_Info = await this.getTokenInfo(null, null, {
             table: "tokens",
             blockchain: "eth",
@@ -324,7 +323,7 @@ class ethHandler{
             
             // Get pool reserves
             const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
-
+            
             // Calculate the pool price
             const divisor0 = 10n ** BigInt(poolInfo.token0.decimals)
             const divisor1 = 10n ** BigInt(poolInfo.token1.decimals)
@@ -386,63 +385,68 @@ class ethHandler{
     /**
      * Gets current pool price of a uniswap pool by its reserves.
      * @param {string} poolAddress - The address of the uniswap V3 pool
-     * @param {object} poolInfo - An object resembling each token's info in the pool
      *  namely, its address, symbol and decimals.
      * @returns {object} Pool's reserves and symbol for each token, and calculated price
      */
-    async getPoolPrice_uniswap_V3(poolAddress, poolInfo){
-        function calculatePriceFromSqrtPriceX96(sqrtPriceX96, decimals0, decimals1) {
-            // Convert sqrtPriceX96 to a BigNumber
-            const sqrtPriceBN = ethers.BigNumber.from(sqrtPriceX96);
-            
-            // Calculate price = (sqrtPriceX96 / 2^96) ^ 2
-            const Q96 = ethers.BigNumber.from(2).pow(96);
-            
-            // First divide by 2^96
-            const sqrtPrice = sqrtPriceBN.mul(ethers.BigNumber.from(10).pow(18)).div(Q96);
-            
-            // Then square it and adjust for decimals
-            const price = sqrtPrice.mul(sqrtPrice)
-                .div(ethers.BigNumber.from(10).pow(18))
-                .mul(ethers.BigNumber.from(10).pow(decimals0))
-                .div(ethers.BigNumber.from(10).pow(decimals1));
-            
-            // Convert to a JavaScript number for easier display
-            return parseFloat(ethers.utils.formatUnits(price, decimals0));
-        }
-
-
+    async getPoolPrice_uniswap_V3(poolAddress){
         // Fetch ABIs
         const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/uniswapV3Pool_ETH.json"))
         const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+        if(this.dbPool === undefined){ throw new Error("Database pool not defined") }
 
-        // Create contract instance
-        const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+        const result = await this.getPoolInfo_offline(poolAddress, "eth", this.dbPool, ["token0", "token1", "contract_address", "token0_address", "token1_address", "token1_address"])
 
-        // Get pool reserves
-        const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
+        const token0_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token0_address,
+        })
 
-        // Calculate the pool price
-        const divisor0 = 10n ** BigInt(poolInfo.token0.decimals)
-        const divisor1 = 10n ** BigInt(poolInfo.token1.decimals)
+        const token1_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token1_address,
+        })
 
-        const reserve0 = parseFloat(String(_reserve0)) / parseFloat(String(divisor0))
-        const reserve1 = parseFloat(String(_reserve1)) / parseFloat(String(divisor1))
+        if(result && token0_Info && token1_Info){
+            const poolInfo = {
+                address: result.contract_address,
+                token0: token0_Info,
+                token1: token1_Info,
+            }
 
-        const poolPrice = reserve0 / reserve1
+            // Create contract instance
+            const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
 
-        return {
-            token0: {
-                symbol: poolInfo.token0.symbol,
-                reserve: reserve0,
-            },
-            token1: {
-                symbol: poolInfo.token1.symbol,
-                reserve: reserve1,
-            },
-            price: poolPrice
+            const slot0 = await poolContract.methods.slot0().call();
+            const sqrtPriceX96 = slot0.sqrtPriceX96;
+
+            // Calculate price from sqrtPriceX96
+            // Formula: price = (sqrtPriceX96 / 2^96)^2
+            const numerator = BigInt(sqrtPriceX96) * BigInt(sqrtPriceX96);
+            const denominator = BigInt(2) ** BigInt(192); // 2^(96*2)
+    
+            // Calculate raw price (token1/token0)
+            const rawPrice = Number(numerator) / Number(denominator);
+            
+            // Adjust for decimals
+            const adjustedPrice = rawPrice * (10 ** (poolInfo.token0.decimals - poolInfo.token1.decimals));
+    
+            return {
+                token0: {
+                    symbol: poolInfo.token0.symbol,
+                },
+                token1: {
+                    symbol: poolInfo.token1.symbol,
+                },
+                price: adjustedPrice
+            }
+        }else{
+            return null
         }
-}
+    }
 
     /*****************************************************
      ******************* Sushiswap V2 ********************
@@ -456,11 +460,11 @@ class ethHandler{
      */
     async getPoolInfo_sushiswap_V2(poolAddress){
         // Fetch ABIs
-        const UNISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/sushiswapV2Pool_ETH.json"))
+        const SUSHISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/sushiswapV2Pool_ETH.json"))
         const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
 
         // Create contract instance
-        const poolContract = new this.web3.eth.Contract(UNISWAP_POOL_ABI, poolAddress)
+        const poolContract = new this.web3.eth.Contract(SUSHISWAP_POOL_ABI, poolAddress)
 
         // Get token addresses
         const token0Address = await poolContract.methods.token0().call()
@@ -477,6 +481,77 @@ class ethHandler{
         }
     }
 
+
+    /**
+     * Gets a sushiswap V2's pool information
+     * @param {string} poolAddress - The address of the sushiswap V2 pool
+     * @returns {object} An object resembling the pool's information
+     */
+    async getPoolPrice_sushiswap_V2(poolAddress){
+        // Fetch ABIs
+        const SUSHISWAP_POOL_ABI = await loadABI(join(getDirPath(), "ABIs/sushiswapV2Pool_ETH.json"))
+        const ERC20_ABI = await loadABI(join(getDirPath(), "ABIs/ERC20_Tokens.json"))
+        if(this.dbPool === undefined){ throw new Error("Database pool not defined") }
+
+        const result = await this.getPoolInfo_offline(poolAddress, "eth", this.dbPool, ["token0", "token1", "contract_address", "token0_address", "token1_address", "token1_address"])
+
+        const token0_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token0_address,
+        })
+
+        const token1_Info = await this.getTokenInfo(null, null, {
+            table: "tokens",
+            blockchain: "eth",
+            pool: this.dbPool,
+            contract_address: result.token1_address,
+        })
+
+
+        if(result && token0_Info && token1_Info){
+            const poolInfo = {
+                address: result.contract_address,
+                token0: token0_Info,
+                token1: token1_Info,
+            }
+
+            // Create contract instance
+            const poolContract = new this.web3.eth.Contract(SUSHISWAP_POOL_ABI, poolAddress)
+            
+            // Get pool reserves
+            const { _reserve0, _reserve1, _blockTimestampLast } = await poolContract.methods.getReserves().call()
+            
+            // Calculate the pool price
+            const divisor0 = 10n ** BigInt(poolInfo.token0.decimals)
+            const divisor1 = 10n ** BigInt(poolInfo.token1.decimals)
+
+            const reserve0 = parseFloat(String(_reserve0)) / parseFloat(String(divisor0))
+            const reserve1 = parseFloat(String(_reserve1)) / parseFloat(String(divisor1))
+
+            const poolPrice = reserve0 / reserve1
+
+            return {
+                token0: {
+                    symbol: poolInfo.token0.symbol,
+                    reserve: reserve0,
+                },
+                token1: {
+                    symbol: poolInfo.token1.symbol,
+                    reserve: reserve1,
+                },
+                price: poolPrice
+            }
+        } else{
+            return null
+        }
+    }
+
+
+    /*****************************************************
+     ******************* Sushiswap V3 ********************
+     *****************************************************/
     
     /**
      * Gets a sushiswap V3's pool information
@@ -837,8 +912,9 @@ const sushiV3Pool = "0x01b94ac1abf25c132bced6918513f1822d0dc52f"
 
 // console.log(await _ethHandler.getPoolInfo_offline("0x72c2178E082feDB13246877B5aA42ebcE1b72218", "eth", app.locals.dbPool, ["contract_address", "token0", "token1"]))
 // console.log(await _ethHandler.getPoolInfo_sushiswap_V2(sushiV3Pool))
-// const v = await crawlerHandler.sushiswapCrawler_ETH(WETH, USDT)
-// console.log(v)
+// const v = await crawlerHandler.curveProtocolCrawler_ETH(WETH, USDT)
+// console.log(v[1].extraInfo)
+
 
 export{
     loadABI,

@@ -35,7 +35,8 @@ if(! await databaseUtils.checkTableExists("tasks", dbPool, "public")){
             status VARCHAR(20) NOT NULL,
             pid INTEGER NOT NULL,
             created_at TIMESTAMP NOT NULL,
-            updated_at TIMESTAMP NOT NULL
+            updated_at TIMESTAMP NOT NULL,
+            extra_info JSONB
         `
     await databaseUtils.createTable("tasks", dbPool, _query)
 }

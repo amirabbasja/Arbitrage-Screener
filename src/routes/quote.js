@@ -16,11 +16,12 @@ const handler_ETH = new ethHandler(process.env.alchemy_api_key, app.locals.dbPoo
 
 quotesRouter.get("/:chain/:exchange/:address", 
     await rateLimitMiddleware(
-        async (req, res) => {
+        async (req, res, next) => {
             const address = req.params.address 
             const chain = req.params.chain
             const exchangeName = req.params.exchange.split("_")[0]
             const exchangeVersion = req.params.exchange.split("_")[1]
+            const taskId = req.query.taskId // Optional variable
             
             try{
                 // TODO: Add a section that checks if exchange name is valid
@@ -64,19 +65,22 @@ quotesRouter.post("/quoteFetcher", async (req, res) => {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = path.dirname(__filename);
 
-        // Spawn a child process to run the script
-        const childProcess = spawn("node", [path.join(__dirname, "..", "quoteFetcher.js")])
-        const pid = childProcess.pid
-        
         //Insert the task to the database
         const query = await databaseUtils.addRow("tasks", {
             status: "running",
-            pid: pid,
+            pid: -1, // Will update this after spawning the process
             created_at: (new Date).toISOString(),
-            updated_at: (new Date).toISOString()
+            updated_at: (new Date).toISOString(),
+            extra_info: JSON.stringify({})
         }, app.locals.dbPool)
-
         const taskId = query.id
+
+        // Spawn a child process to run the script and pass the taskId
+        const childProcess = spawn("node", [path.join(__dirname, "..", "quoteFetcher.js"), taskId])
+        const pid = childProcess.pid
+        
+        // Update the task with the PID
+        await databaseUtils.updateRecords("tasks", app.locals.dbPool, {id: taskId}, {pid: pid})
 
         // Forward child process stdout to parent console (For debugging purposes)
         childProcess.stdout.on('data', (data) => {

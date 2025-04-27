@@ -4,6 +4,14 @@ import {app} from "./app.js"
 import databaseUtils from "./utils/dbUtils.js"
 import { start } from "repl";
 
+// Get the task ID from command line arguments
+const taskId = process.argv[2];
+
+if (!taskId) {
+    console.error("Task ID is required");
+    process.exit(1);
+}
+
 /**
  * Batches objects in an array based on a specified property
  * @param {Array} array - The array of objects to batch
@@ -30,29 +38,31 @@ function batchByProperty(array, property) {
  * Sets up intervals for each loop
  * @param {Array} delays - An array representing delay of each function (In ms)
  * @param {Array} tasks - An array representing the functions to run
+ * @param {string} taskId - The ID of the current task
  */
-async function setupLoops(delays, tasks) {
+async function setupLoops(delays, tasks, taskId) {
     // Ensure each function has a delay
     if (delays.length !== tasks.length) {
         throw new Error("Number of delays and tasks must be equal.");
     }
 
     // Set up an interval for each loop
-    delays.forEach((delay, index) => {
-        setInterval(tasks[index], delay);
+    const intervals = delays.map((delay, index) => {
+        return setInterval(() => tasks[index](taskId), delay);
     });
+
+    // Return intervals so they can be cleared if needed
+    return intervals;
 }
 
 /**
- * 
- * @param {Object} pairs - An object representing the pools to fetch. Each
- *  object should have following keys: {blockchain, token0, token1, exchange
- *  exchange_type, contract_address}. Preferably, the pools should be in the
- *  same blockchain.
+ * A function that sends requests to fetch quotes
+ * @param {Object} pairs - An object representing the pools to fetch
+ * @param {string} taskId - The ID of the current task
  */
-async function requestSender(pairs){
+async function requestSender(pairs, taskId){
     const urls = pairs.map((pair) => {
-        return `http://${process.env.app_host}:${process.env.app_port}/quote/${pair.blockchain}/${pair.exchange}_${pair.exchange_type}/${pair.contract_address}/`
+        return `http://${process.env.app_host}:${process.env.app_port}/quote/${pair.blockchain}/${pair.exchange}_${pair.exchange_type}/${pair.contract_address}?taskId=${taskId}`
     })
 
     const requests = urls.map((url) => {
@@ -88,85 +98,41 @@ async function requestSender(pairs){
         })
     })
 
+    // Send requests
     const results = await Promise.allSettled(requests)
     
-    return results
+    return results;
 }
 
-async function printMessage() {
+/**
+ * Fetches quotes for all pairs
+ * @param {string} taskId - The ID of the current task
+ */
+async function fetchQuotes(taskId) {
     try{
         // Get all pairs that need to be fetched
         let pairs = await databaseUtils.getTableAsJson("pairs", app.locals.dbPool)
         pairs = batchByProperty(pairs, "blockchain")
 
-        const ethCatcher = () => requestSender(pairs["eth"])
+        // Set up a different loop for each blockchain
+        const ethCatcher = (taskId) => requestSender(pairs["eth"], taskId)
 
-        await setupLoops([10000], [ethCatcher])
-
-
-        // const _host = process.env.app_host
-        // const _port = process.env.app_port
-        // let url1 = `http://${_host}:${_port}/quote/eth/uniswap_V2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
-        // let url2 = `http://${_host}:${_port}/quote/eth/uniswap_V2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
-        // let url3 = `http://${_host}:${_port}/quote/eth/uniswap_V2/0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc/`
-        // let url4 = `http://${_host}:${_port}/quote/eth/uniswap_V2/0xB4e16d0168e52d35CaCD2185b44281Ec28C9Dc/`
-        // let urlS = [
-        //     url1, url2, url3, url4, //url1, url2, url3, url4, url1, url2, url3, url4, url1, url2, url3, url4,
-        //     //url1, url2, url3, url4, url1, url2, url3, url4, url1, url2, url3, url4, url1, url2, url3, url4
-        // ]
-
-        // const requestTimes = [];
-        // const requestStart = Date.now();
-        // const requests = urlS.map((url, index) => 
-        //     {
-        //         return fetch(url)
-        //             .then(response => {
-        //                     const requestEnd = Date.now();
-        //                     requestTimes[index] = {
-        //                     url,
-        //                     duration: requestEnd - requestStart,
-        //                     timestamp: new Date(requestEnd).toISOString()
-        //                 }
-        //                 return response;
-        //             })
-        //             .catch(error => {
-        //                 const requestEnd = Date.now();
-        //                 requestTimes[index] = {
-        //                     url,
-        //                     error: error.message,
-        //                     duration: requestEnd - requestStart,
-        //                     timestamp: new Date(requestEnd).toISOString()
-        //                 }
-        //                 throw error;
-        //             })
-        //     }
-        // )
+        // Run the loops
+        const intervals = await setupLoops([10000], [ethCatcher], taskId)
         
-        // const startTime = Date.now()
-        // let results = await Promise.allSettled(requests)
-        // let response = undefined
-        // // Calculate total time
-        // const totalTime = Date.now() - startTime;
+        // Set up event listener for process termination
+        process.on('SIGTERM', () => {
+            console.log(`Task ${taskId} received SIGTERM signal`);
+            // Clear all intervals
+            intervals.forEach(interval => clearInterval(interval));
+            process.exit(0);
+        });
 
-        // for (let i = 0; i < results.length; i++) {
-        //     // The issue is here - Promise.allSettled returns objects with status and value/reason properties
-        //     if (results[i].status === 'fulfilled') {
-        //         response = await results[i].value.json()
-                
-        //         if(response.status === "success"){
-        //             console.log(response.data.exchange, response.data.quote.price, `${requestTimes[i].duration}ms`)
-        //         }else{
-        //             console.log("NAN", "NAN", `${requestTimes[i].duration}ms`, `${response.data.params.exchangeName}_${response.data.params.exchangeVersion}`)
-        //         }
-        //     } else {
-        //         console.log(`Request ${i} failed:`, results[i].reason)
-        //     }
-        // }
-        
-        // setTimeout(printMessage, 5000)
     }catch(err){
-        console.log(err)
+        console.log(`Error fetching quotes: ${err}`)
+        process.exit(1);
     }
 }
 
-printMessage()
+// Start the fetching process with the task ID
+fetchQuotes(taskId);

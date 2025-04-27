@@ -103,7 +103,7 @@ for(let i = 0; i < pairs.length; i++){
                                 // token0 and token1, else, we use the poolInfo's token0 and token1
                                 const result = await databaseUtils.addRow("pairs", {
                                     token0:poolInfo[k].tokens ? poolInfo[k].tokens[0].toLowerCase() : token0.toLowerCase(),
-                                    token1:poolInfo[k].tokens ? poolInfo[k].tokens[1].toLowerCase() : token0.toLowerCase(),
+                                    token1:poolInfo[k].tokens ? poolInfo[k].tokens[1].toLowerCase() : token1.toLowerCase(),
                                     token0_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[0] : token0Address,
                                     token1_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[1] : token1Address,
                                     blockchain:chain,

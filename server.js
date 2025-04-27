@@ -4,18 +4,19 @@
 // Import necessary modules
 import express from "express"
 import dotenv from "dotenv"
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { fileURLToPath } from 'url'
+import path from 'path'
 import {app} from "./src/app.js"
 import databaseUtils from "./src/utils/dbUtils.js"
-import { Server as WS_Server} from "socket.io";
+import { Server as WS_Server} from "socket.io"
 import http from "http"
 
 // Import routers
 import {indexRouter} from "./src/routes/index.js"
-import { quotesRouter } from "./src/routes/quote.js";
-import { pairsRouter } from "./src/routes/pairs.js";
-import { helpRouter } from "./src/routes/help.js";
+import { quotesRouter } from "./src/routes/quote.js"
+import { pairsRouter } from "./src/routes/pairs.js"
+import { helpRouter } from "./src/routes/help.js"
+import { requestStatusRouter } from "./src/routes/requestStatus.js"
 
 // Cleanup running tasks in the database
 if(await  databaseUtils.checkTableExists("tasks", app.locals.dbPool, "public")){
@@ -32,8 +33,8 @@ if(await  databaseUtils.checkTableExists("tasks", app.locals.dbPool, "public")){
 }
 
 // Load .env files
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.resolve(__dirname, './.env') })
 
 // Make the websocket server to listen to the quote changes
@@ -41,20 +42,20 @@ const server = http.createServer(app)
 const io = new WS_Server(server)
 
 // Listen for PostgreSQL notifications
-const eventListenerClient = await app.locals.dbPool.connect();
+const eventListenerClient = await app.locals.dbPool.connect()
 await eventListenerClient.query('LISTEN table_change')
 
 eventListenerClient.on('error', (err) => {
-    console.error('Event listener client error:', err.message);
-});
+    console.error('Event listener client error:', err.message)
+})
 
 eventListenerClient.on('notification', (msg) => {
     try {
-        const payload = JSON.parse(msg.payload);        
-        io.emit('table_update', payload); // Broadcast to all connected clients
+        const payload = JSON.parse(msg.payload)
+        io.emit('table_update', payload) // Broadcast to all connected clients
     } catch (error) {
-        console.error("Error parsing or emitting payload to clients:", error);
-        console.error("Raw payload was:", msg.payload);
+        console.error("Error parsing or emitting payload to clients:", error)
+        console.error("Raw payload was:", msg.payload)
     }
 })
 
@@ -66,6 +67,7 @@ app.use("/", indexRouter)
 app.use("/quote", quotesRouter)
 app.use("/pairs", pairsRouter)
 app.use("/help", helpRouter)
+app.use("/status", requestStatusRouter)
 
 // Server setup
 const port = process.env.port || 3000

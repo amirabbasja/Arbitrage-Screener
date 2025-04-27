@@ -30,6 +30,72 @@ function batchObjectsByProperties(array, prop1, prop2) {
  * with quotes
  */
 async function populatePairTables() {
+    
+    // Function to copy table cell ID to clipboard
+    function setupCellIdCopy() {
+        // Create popup element if it doesn't exist
+        let popup = document.getElementById('copy-popup');
+        if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'copy-popup';
+        popup.style.position = 'fixed';
+        popup.style.bottom = '20px';
+        popup.style.right = '20px';
+        popup.style.backgroundColor = '#333';
+        popup.style.color = 'white';
+        popup.style.padding = '10px 15px';
+        popup.style.borderRadius = '4px';
+        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+        popup.style.opacity = '0';
+        popup.style.transition = 'opacity 0.3s ease-in-out';
+        popup.style.zIndex = '9999';
+        document.body.appendChild(popup);
+        }
+
+        // Get all table cells
+        const cells = document.querySelectorAll('td');
+        
+        // Add click event listener to each cell
+        cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            // Get the cell's ID
+            let cellId = this.querySelector("span");
+            
+            if (cellId) {
+            // Copy to clipboard
+                cellId = cellId.id
+                navigator.clipboard.writeText(cellId.split("_")[1])
+                    .then(() => {
+                        // Visual feedback on the cell
+                        const originalBg = this.style.backgroundColor;
+                        this.style.backgroundColor = '#e6ffe6'; // Light green flash
+                        
+                        // Reset background after a short delay
+                        setTimeout(() => {
+                            this.style.backgroundColor = originalBg;
+                        }, 300);
+                        
+                        // Show popup notification
+                        popup.textContent = `Copied contract address: ${cellId.split("_")[1]}`;
+                        popup.style.opacity = '1';
+                        
+                        // Hide popup after 2 seconds
+                        setTimeout(() => {
+                            popup.style.opacity = '0';
+                        }, 2000);
+                        
+                        // console.log('Cell ID copied to clipboard: ' + cellId);
+                    })
+                    .catch(err => {
+                        // console.error('Failed to copy cell ID: ', err);
+                    });
+            } else {
+                // console.warn('This cell has no ID');
+            }
+        });
+    });
+    }
+    
     // Make the request to get all the table "pairs" as a big JSON object
     const response = await (await fetch("/pairs")).json()
     const data = response.data
@@ -71,7 +137,8 @@ async function populatePairTables() {
     const tableContainer = document.createElement("div")
     tableContainer.innerHTML = _html
     document.body.appendChild(tableContainer)
-
+    
+    setupCellIdCopy()
     console.log("finished")
 }
 
@@ -137,6 +204,8 @@ async function startBtnLoad(){
         document.getElementById("activation-btn").classList.add("stop-btn")
     }
 }
+
+
 
 document.addEventListener("topMenuLoaded", updateQuotes)
 window.addEventListener('load', populatePairTables)

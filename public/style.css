@@ -133,10 +133,65 @@ table {
     color: white;
 }
 
-.user-profile {
+/* Session button and popup styles */
+.session-btn {
+    background-color: #36383b;
+    color: white;
+    border: 1px solid transparent;
+    cursor: pointer;
+    padding: 0px 25px;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+    font-family: 'Roboto Slab', serif;
+    height: 40px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    width: auto;
+    min-width: 140px;
+}
+
+.session-btn:hover {
+    cursor: pointer;
+    border: 1px solid #fff;
+    opacity: 0.9;
+}
+
+.session-popup {
+    display: none;
+    position: absolute;
+    right: 20px;
+    top: 70px;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    width: 200px;
+    z-index: 100;
+}
+
+.session-popup.show {
+    display: block;
+}
+
+.session-popup-content {
+    padding: 15px;
+}
+
+.session-popup-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    color: #333;
+    font-family: 'Roboto Slab', serif;
+    cursor: pointer;
+}
+
+.session-popup-item:last-child {
+    border-bottom: none;
+}
+
+.session-popup-item:hover {
+    background-color: #f5f5f5;
 }
 
 /* Help page */
@@ -145,4 +200,55 @@ table {
     margin: 1em auto;
     width: 1000px;
     font-family: 'Roboto Slab', serif;
+}
+
+
+/* Updated styles for limiter stats */
+#limiter-stats {
+    cursor: default;
+}
+
+#limiter-stats:hover {
+    background-color: #fff;
+}
+
+#limiter-stats h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #333;
+}
+
+#limiter-stats-content {
+    font-family: monospace;
+    font-size: 12px;
+    margin: 0;
+    color: #555;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.stat-row {
+    padding: 3px 0;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    font-weight: bold;
+}
+
+.stat-value {
+    text-align: right;
+}
+
+.stats-message {
+    font-style: italic;
+    color: #888;
+    text-align: center;
+    padding: 5px 0;
 }

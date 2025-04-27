@@ -8,7 +8,21 @@
         <a href="/help">Help</a>
     </div>
     <div class="user-controls">
-        <button class="activation-btn start-btn" id = "activation-btn">Start</button>
-        <div class="user-profile">User <i class="fa fa-user-circle"></i></div>
+        <button class="activation-btn start-btn" id="activation-btn">Start</button>
+        <button class="session-btn" id="session-btn">Session Info <i class="fa fa-user-circle"></i></button>
+        <div class="session-popup" id="session-popup">
+            <div class="session-popup-content">
+                <div class="session-popup-item" id="limiter-stats">
+                    <h4>Alchemy Limiter Stats</h4>
+                    <div id="limiter-stats-content">
+                        <div class="stat-row" id="stat-queued"><span class="stat-label">Queued:</span> <span class="stat-value">0</span></div>
+                        <div class="stat-row" id="stat-dropped"><span class="stat-label">Dropped:</span> <span class="stat-value">0</span></div>
+                        <div class="stat-row" id="stat-running"><span class="stat-label">Running:</span> <span class="stat-value">0</span></div>
+                        <div class="stat-row" id="stat-completed"><span class="stat-label">Completed:</span> <span class="stat-value">0</span></div>
+                        <div class="stat-row" id="stat-avg-time"><span class="stat-label">Avg Time:</span> <span class="stat-value">0ms</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

@@ -37,19 +37,22 @@
         }
 
         function formatNumber(num) {
+            // Don't try to format "ERR" strings
+            if (num === "ERR") { return "ERR" }
+
             // If the number is zero, return it as is
             if (num === 0) return '0';
             
             // Get the absolute value to handle negative numbers
             const absNum = Math.abs(num);
-            
+
             // Check if the number is very small (less than 0.0001)
             if (absNum < 0.0001) {
                 // Use scientific notation with 4 significant digits
                 return num.toExponential(3); // 3 decimal places + 1 digit before decimal = 4 significant digits
             } else {
                 // For regular numbers, use toFixed to get 4 decimal places
-                return parseFloat(num.toFixed(4)).toString();
+                return parseFloat(parseFloat(num).toFixed(4)).toString();
             }
         }
         const socket = io(); // Connect to the Socket.IO server
@@ -60,6 +63,12 @@
 
             if(formatNumber(data.new_data.latest_quote.price) !== element.innerText){
                 element.innerText = formatNumber(data.new_data.latest_quote.price)
+                
+                // Add a red color to quotes that return "ERR"
+                if(element.innerText == "ERR"){
+                    element.style.color = "red";
+                }
+
                 highlightCell(element);
             }
         });
