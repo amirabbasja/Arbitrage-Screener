@@ -16,6 +16,8 @@ if(! await databaseUtils.checkTableExists("pairs", dbPool, "public")){
             blockchain VARCHAR(255) NOT NULL,
             token0 VARCHAR(255) NOT NULL,
             token1 VARCHAR(255) NOT NULL,
+            base_asset VARCHAR(255) NOT NULL,
+            quote_asset VARCHAR(255) NOT NULL,
             token0_address VARCHAR(255) NOT NULL,
             token1_address VARCHAR(255) NOT NULL,
             exchange VARCHAR(255) NOT NULL,

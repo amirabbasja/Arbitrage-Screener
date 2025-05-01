@@ -68,7 +68,7 @@ function setupUserPopup() {
     }
 }
 
-/**
+/** 
  * Fetches and updates the limiter stats every 500ms
  */
 function updateLimiterStats() {
@@ -86,6 +86,17 @@ function updateLimiterStats() {
                 if (runningTask && runningTask.extra_info) {
                     let extraInfo = runningTask.extra_info
                     
+                    // Calculate uptime if we have a creation time
+                    let uptimeText = 'N/A';
+                    if (runningTask.created_at) {
+                        const creationTime = new Date(runningTask.created_at);
+                        const now = new Date();
+                        const uptimeMs = now - creationTime;
+                        
+                        // Format uptime nicely
+                        uptimeText = formatUptime(uptimeMs);
+                    }
+                    
                     if (extraInfo.alchemyLimiterStats) {
                         const stats = extraInfo.alchemyLimiterStats
                         
@@ -99,12 +110,14 @@ function updateLimiterStats() {
                         if (messageEl) messageEl.remove()
                         
                         // Update each specific stat row
+                        document.querySelector('#stat-task-id .stat-value').textContent = runningTask.id || 'Unknown'
                         document.querySelector('#stat-queued .stat-value').textContent = stats.queued || 0
                         document.querySelector('#stat-dropped .stat-value').textContent = stats.dropped || 0
                         document.querySelector('#stat-running .stat-value').textContent = stats.running || 0
                         document.querySelector('#stat-completed .stat-value').textContent = stats.completed || 0
                         document.querySelector('#stat-avg-time .stat-value').textContent = 
                             stats.averageExecutionTime ? Math.round(stats.averageExecutionTime) + 'ms' : '0ms'
+                        document.querySelector('#stat-uptime .stat-value').textContent = uptimeText
                     } else {
                         resetStatsDisplay('No limiter stats available')
                     }
@@ -117,6 +130,21 @@ function updateLimiterStats() {
         } catch (error) {
             console.error('Error fetching limiter stats:', error)
             resetStatsDisplay('Error fetching stats')
+        }
+    }
+    
+    // Helper function to format uptime in a human-readable way
+    function formatUptime(ms) {
+        const seconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        
+        if (hours > 0) {
+            return `${hours}h ${minutes % 60}m`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds % 60}s`;
+        } else {
+            return `${seconds}s`;
         }
     }
     
@@ -143,11 +171,13 @@ function updateLimiterStats() {
             }
         } else {
             // Reset all values to 0
+            document.querySelector('#stat-task-id .stat-value').textContent = 'None'
             document.querySelector('#stat-queued .stat-value').textContent = '0'
             document.querySelector('#stat-dropped .stat-value').textContent = '0'
             document.querySelector('#stat-running .stat-value').textContent = '0'
             document.querySelector('#stat-completed .stat-value').textContent = '0'
             document.querySelector('#stat-avg-time .stat-value').textContent = '0ms'
+            document.querySelector('#stat-uptime .stat-value').textContent = '0s'
             
             // Show all rows - explicitly set display to flex to override any previous 'none' setting
             document.querySelectorAll('#limiter-stats-content .stat-row').forEach(row => {

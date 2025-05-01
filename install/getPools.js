@@ -6,6 +6,7 @@ import databaseUtils from "../src/utils/dbUtils.js"
 import {dbPool} from "../src/config/db.js"
 import {ethHandler, loadABI} from "../src/utils/blockchainUtils.js"
 import Web3 from "web3"
+import { el } from "date-fns/locale"
 
 let verbose = true
 
@@ -36,6 +37,8 @@ const pairs = [
     ["eth", "weth", "dai"],
     ["eth", "weth", "usdc"],
 ]
+
+const quoteAsset = ["usdt", "dai", "usdc", "weth"] // Order is important. The lower the index, the higher the priority.
 
 // Fill up tokens table
 // Define the handlers
@@ -76,6 +79,7 @@ for(let i = 0; i < pairs.length; i++){
             for(let j = 0; j < functions.length; j++){
                 if(functions[j].includes("_ETH")){
                     const exchangeName = functions[j].split("_")[0].replace("Crawler", "") // Get the exchange name
+
                     const poolInfo = await crawlerHandler[functions[j]](token0Address, token1Address)
 
                     // If errors occurred or no pools were found, the returned object should have a msg key
@@ -101,9 +105,43 @@ for(let i = 0; i < pairs.length; i++){
                                 // Some exchanges have different names for token0 and token1, or don't provide them. 
                                 // We handle that here. If token0 and token1 are not provided, we assume the for loop's
                                 // token0 and token1, else, we use the poolInfo's token0 and token1
+                                let token0_symbol = poolInfo[k].tokens ? poolInfo[k].tokens[0].toLowerCase() : token0.toLowerCase()
+                                let token1_symbol = poolInfo[k].tokens ? poolInfo[k].tokens[1].toLowerCase() : token1.toLowerCase()
+                                let quoteAsset_symbol, baseAsset_symbol
+                                
+                                // Choose the base and quote asset for the pair
+                                const idx0 = quoteAsset.indexOf(token0_symbol)
+                                const idx1 = quoteAsset.indexOf(token1_symbol)
+
+                                if (idx0 !== -1) {
+                                    if(idx1 !== -1){
+                                        // Both assets are are included in quoteAsset. 
+                                        // Choose the one with the higher priority (Lower index)
+                                        quoteAsset_symbol = idx0 < idx1 ? token0_symbol : token1_symbol
+                                        baseAsset_symbol = idx0 < idx1 ? token1_symbol : token0_symbol
+                                    } else{
+                                        // Only token0 is included in quoteAsset
+                                        quoteAsset_symbol = token0_symbol
+                                        baseAsset_symbol = token1_symbol
+                                    }
+                                } else{
+                                    if (idx1 !== -1){
+                                        // Only token1 is included in quoteAsset
+                                        quoteAsset_symbol = token1_symbol
+                                        baseAsset_symbol = token0_symbol
+                                    } else{
+                                        // Both assets are not included in quoteAsset
+                                        quoteAsset_symbol = token0_symbol
+                                        baseAsset_symbol = token1_symbol
+                                    }
+                                }
+
+
                                 const result = await databaseUtils.addRow("pairs", {
-                                    token0:poolInfo[k].tokens ? poolInfo[k].tokens[0].toLowerCase() : token0.toLowerCase(),
-                                    token1:poolInfo[k].tokens ? poolInfo[k].tokens[1].toLowerCase() : token1.toLowerCase(),
+                                    token0: token0_symbol,
+                                    token1: token1_symbol,
+                                    base_asset: baseAsset_symbol,
+                                    quote_asset : quoteAsset_symbol,
                                     token0_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[0] : token0Address,
                                     token1_address:poolInfo[k].tokens ? poolInfo[k].tokens_addresses[1] : token1Address,
                                     blockchain:chain,

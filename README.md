@@ -18,6 +18,8 @@
 
 8. Install *socket.io* package for real-time updates UI via websockets
 
+9. install *date-fns* package to convert UTC time to local time.
+
 ---
 
 ## How to work with this app
@@ -26,7 +28,7 @@
 
 * All RPCs have a rate-limit. To abide by the rate-limit rules of teh RPCs, we have implemented a bottleneck that servers as a middleware which all the outgoing requests are gone through it. Each RPC will have its own *Bottleneck* instance which can be configured in **/src/utils/requestLimiter.js**
 
-* When running the app for the first time first run the **./install/setupTables.js** file to create the necessary tables in the database, After that, rin **./install/setupFunctions.js** to make the necessary postgreql functions and notifications. Then run the **./install/getPools.js** file to populate the table **pairs** and **tokens** tables (Will create this table if doesn't exist) with contract addresses for pools in various blockchains and pairs. Note that this file needs you to input two constants so it would run properly, **1. pairs** which stores which pairs we need to look for on what blockchain, and **2. tokenContractAddresses** which stores the contract addresses of the tokens that are in previously defined, pairs object. An example for each variable is added below:
+* When running the app for the first time first run the **./install/setupTables.js** file to create the necessary tables in the database, After that, rin **./install/setupFunctions.js** to make the necessary postgreql functions and notifications. Then run the **./install/getPools.js** file to populate the table **pairs** and **tokens** tables (Will create this table if doesn't exist) with contract addresses for pools in various blockchains and pairs. Note that this file needs you to input three constants so it would run properly, **1. pairs** which stores which pairs we need to look for on what blockchain, and **2. tokenContractAddresses** which stores the contract addresses of the tokens that are in previously defined, pairs object. **3. quoteAssets** which denotes the prices of the assets, should be calculated with regards to these assets (For example if we want to calculate the price of a pool that has *FTM* and *USDT*, *USDT* will be considered as quote and *FTM* as the base asset. The order of the array is important and if we want to calculate price of a pool which as weth and *USDT*, *USDT* will be considered as the quote asset). An example for each variable is added below:
 
 ```javascript
         const tokenContractAddresses = {
@@ -43,9 +45,13 @@
             ["eth", "weth", "dai"],
             ["eth", "weth", "usdc"],
         ]
+
+        const quoteAssets = ["usdt", "dai", "usdc", "weth"]
 ```
 
-* On the dashboard page, simply press ***start*** to start getting the quotes
+* In all pairs that have stable coins in them (USDT, USDC, DAI), the stables are assumed to be the quote (PEPE/USDT), Also, if pairs have WETH in them (e.g. S/WETH or PEPE/WETH), WETH is taken to be the quote as well. I have denominated this in the table "pairs" as "base" and "quote" asset. This helps us with inconsistencies in a pair's price in different exchanges (For ETH and USDT, some may provide ETH/USDT but some may provide USDT/ETH by default).
+
+* On the dashboard page, simply press ***start*** to start getting the quotes.
 
 ---
 

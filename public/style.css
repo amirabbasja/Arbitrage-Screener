@@ -186,6 +186,10 @@ table {
     cursor: pointer;
 }
 
+.session-popup-item h4 {
+    text-align: center;
+}
+
 .session-popup-item:last-child {
     border-bottom: none;
 }
@@ -194,16 +198,6 @@ table {
     background-color: #f5f5f5;
 }
 
-/* Help page */
-
-.help-content{
-    margin: 1em auto;
-    width: 1000px;
-    font-family: 'Roboto Slab', serif;
-}
-
-
-/* Updated styles for limiter stats */
 #limiter-stats {
     cursor: default;
 }
@@ -251,4 +245,12 @@ table {
     color: #888;
     text-align: center;
     padding: 5px 0;
+}
+
+/* Help page */
+
+.help-content{
+    margin: 1em auto;
+    width: 1000px;
+    font-family: 'Roboto Slab', serif;
 }

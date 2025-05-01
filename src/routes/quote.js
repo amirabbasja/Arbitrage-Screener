@@ -8,6 +8,7 @@ import databaseUtils from "../utils/dbUtils.js"
 import { spawn } from "child_process"
 import { rateLimitMiddleware } from "../utils/requestLimiter.js"
 import dbUtils from '../utils/dbUtils.js';
+import { format } from "date-fns"
 
 const quotesRouter = express.Router()
 
@@ -27,7 +28,7 @@ quotesRouter.get("/:chain/:exchange/:address",
                 // TODO: Add a section that checks if exchange name is valid
 
                 let quote, poolInfo
-
+                
                 // Will throw an error 
                 quote = await handler_ETH[`getPoolPrice_${exchangeName}_${exchangeVersion}`](address)
 
@@ -42,6 +43,7 @@ quotesRouter.get("/:chain/:exchange/:address",
                     }
                 })
             } catch(err){
+                console.log(`getPoolPrice_${exchangeName}_${exschangeVersion}`, err)
                 res.status(500).json({
                     status: "error",
                     data: {
@@ -69,8 +71,8 @@ quotesRouter.post("/quoteFetcher", async (req, res) => {
         const query = await databaseUtils.addRow("tasks", {
             status: "running",
             pid: -1, // Will update this after spawning the process
-            created_at: (new Date).toISOString(),
-            updated_at: (new Date).toISOString(),
+            created_at: format(new Date, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+            updated_at: format(new Date, "yyyy-MM-dd'T'HH:mm:ssXXX"),
             extra_info: JSON.stringify({})
         }, app.locals.dbPool)
         const taskId = query.id

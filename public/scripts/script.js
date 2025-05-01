@@ -1,4 +1,29 @@
 /**
+ * Formats a number's decimal points
+ * @param {Number} num - The number to format 
+ * @returns 
+ */
+function formatNumber(num) {
+    // Don't try to format "ERR" strings
+    if (num === "ERR") { return "ERR" }
+
+    // If the number is zero, return it as is
+    if (num === 0) return '0';
+    
+    // Get the absolute value to handle negative numbers
+    const absNum = Math.abs(num);
+
+    // Check if the number is very small (less than 0.0001)
+    if (absNum < 0.0001) {
+        // Use scientific notation with 4 significant digits
+        return num.toExponential(3); // 3 decimal places + 1 digit before decimal = 4 significant digits
+    } else {
+        // For regular numbers, use toFixed to get 4 decimal places
+        return parseFloat(parseFloat(num).toFixed(4)).toString();
+    }
+}
+
+/**
  * Groups objects in an array based on two matching properties
  * @param {Array} array - Array of objects to batch
  * @param {string} prop1 - First property to match
@@ -102,7 +127,7 @@ async function populatePairTables() {
 
     // Batch the assets that have the same token0 and token1
     const assets = batchObjectsByProperties(data.pairs, "token0", "token1")
-
+    console.log(assets)
     // Define the html
     let _html = ""
     let tableHtml = ""
@@ -121,11 +146,11 @@ async function populatePairTables() {
 
         // Add rows
         tableHtml += `\t<tr>\n`
-        tableHtml += `\t\t<td>${assets[i][0].token0.toUpperCase()}/${assets[i][0].token1.toUpperCase()}</td>\n`
+        tableHtml += `\t\t<td>${assets[i][0].base_asset.toUpperCase()}/${assets[i][0].quote_asset.toUpperCase()}</td>\n`
         for(let j = 0; j < assets[i].length; j++){
             tableHtml += `
             \t\t<td id="${assets[i][j].blockchain}_${assets[i][j].exchange}_${assets[i][j].exchange_type}_${assets[i][0].token0.toUpperCase()}${assets[i][0].token1.toUpperCase()}">
-                <span id="${assets[i][j].blockchain}_${assets[i][j].contract_address}">NAN</span>
+                <span id="${assets[i][j].blockchain}_${assets[i][j].contract_address}">${assets[i][j].latest_quote? formatNumber(assets[i][j].latest_quote.price) : "NAN"}</span>
             </td>\n
             `
         }
