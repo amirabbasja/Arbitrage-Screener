@@ -22,7 +22,7 @@ quotesRouter.get("/:chain/:exchange/:address",
             const chain = req.params.chain
             const exchangeName = req.params.exchange.split("_")[0]
             const exchangeVersion = req.params.exchange.split("_")[1]
-            const taskId = req.query.taskId // Optional variable
+            const taskId = req.query.taskId // Optional variable)
             
             try{
                 // TODO: Add a section that checks if exchange name is valid

@@ -775,6 +775,9 @@ class ethHandler{
             
             const response = await fetch(url).then(response => response.json())
             
+            if( response.data.length === 0){
+                return null
+            }
 
             return {
                 token0: {
@@ -1030,7 +1033,12 @@ class crawler{
 
     /**
      * Gets all possible trading pairs from Curve protocol ethereum mainnet. It uses
-     * Curve's MetaRegistry contract
+     * a bunch of curve contracts to get all possible trading pairs. 
+     * 
+     * 
+     * This function is deprecated and replaced by curve's own 
+     * 
+     * 
      * @param {String} token0Address - First toke's contract address
      * @param {String} token1Address - Second toke's contract address
      * @returns {array} An array of trading pool objects. If an error has occurred, returns 

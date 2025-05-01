@@ -41,6 +41,17 @@ dotenv.config({ path: path.resolve(__dirname, './.env') })
 const server = http.createServer(app)
 const io = new WS_Server(server)
 
+// Delete the previously acquired price data from table pairs
+if(await databaseUtils.checkTableExists("pairs", app.locals.dbPool, "public")){
+    try {
+        // Reset latest_quote for all 
+        const resetQuoteValue = JSON.stringify({price: "NAN", timestamp: "NAN"})
+        await databaseUtils.updateRecords("pairs", app.locals.dbPool, {}, {latest_quote: resetQuoteValue})
+    } catch(err) {
+        console.error(`Error resetting latest_quote values: ${err.message}`)
+    }
+}
+
 // Listen for PostgreSQL notifications
 const eventListenerClient = await app.locals.dbPool.connect()
 await eventListenerClient.query('LISTEN table_change')

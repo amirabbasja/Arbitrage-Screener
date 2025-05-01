@@ -145,7 +145,7 @@ async function rateLimitMiddleware(handler){
             }
         } catch (err) {
             // Handle errors (e.g., rate limit exceeded)
-            res.status(429).json({ error: 'Request limiter:Too Many Requests' })
+            res.status(429).json({ error: `Request limiter:${err}` })
         }
     }
 }
