@@ -389,6 +389,7 @@ class ethHandler{
                     symbol: poolInfo.token1.symbol,
                     reserve: reserve1,
                 },
+                symbol: `${result.base_asset}/${result.quote_asset}`,
                 price: poolPrice
             }
         }else{
@@ -497,6 +498,7 @@ class ethHandler{
                 token1: {
                     symbol: poolInfo.token1.symbol,
                 },
+                symbol: `${result.base_asset}/${result.quote_asset}`,
                 price: adjustedPrice
             }
         }else{
@@ -606,6 +608,7 @@ class ethHandler{
                     symbol: poolInfo.token1.symbol,
                     reserve: reserve1,
                 },
+                symbol: `${result.base_asset}/${result.quote_asset}`,
                 price: poolPrice
             }
         } else{
@@ -714,6 +717,7 @@ class ethHandler{
                 token1: {
                     symbol: poolInfo.token1.symbol,
                 },
+                symbol: `${result.base_asset}/${result.quote_asset}`,
                 price: adjustedPrice
             }
         }else{
@@ -736,7 +740,7 @@ class ethHandler{
      * @param {string} referenceToken - The contract address of the reference token
      * @returns {object} Pool's symbols for each token and calculated price
      */
-    async getPoolPrice_curveProtocol_(poolAddress){
+    async getPoolPrice_curveProtocol(poolAddress){
         if(this.dbPool === undefined){ throw new Error("Database pool not defined") }
         const chain = "ethereum"
 
@@ -786,6 +790,7 @@ class ethHandler{
                 token1: {
                     symbol: poolInfo.token1.symbol,
                 },
+                symbol: `${result.base_asset}/${result.quote_asset}`,
                 price: response.data[0].price
             }
         } else {
@@ -793,11 +798,6 @@ class ethHandler{
         }
     }
 
-    getPoolPrice_curveProtocol_curveRegistry = async (address) => await this.getPoolPrice_curveProtocol_(address)
-    getPoolPrice_curveProtocol_cryptoPoolsRegistry = async (address) => await this.getPoolPrice_curveProtocol_(address)
-    getPoolPrice_curveProtocol_cryptoTwoFactory = async (address) => await this.getPoolPrice_curveProtocol_(address)
-    getPoolPrice_curveProtocol_curveMetaPool = async (address) => await this.getPoolPrice_curveProtocol_(address)
-    getPoolPrice_curveProtocol_triCryptoFactory = async (address) => await this.getPoolPrice_curveProtocol_(address)
 }
 
 /** A class that helps with finding trading pairs */
@@ -826,11 +826,12 @@ class crawler{
         this.sushiswap_v3_factory_address_ETH = "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F"
 
         // Curve Protocol
-        this.curveProtocol_registry_address_ETH = "0x90E00ACe148ca3b23Ac1bC8C240C2a7Dd9c2d7f5"
-        this.curveProtocol_meta_pool_factory_address_ETH = "0xB9fC157394Af804a3578134A6585C0dc9cc990d4"
-        this.curveProtocol_crypto_pools_registry_address_ETH = "0x8F942C20D02bEfc377D41445793068908E2250D0"
-        this.curveProtocol_crypto_factory_two_address_ETH = "0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F"
-        this.curveProtocol_triCrypto_factory_NG_address_ETH = "0x0c0e5f2fF0ff18a3be9b835635039256dC4B4963"
+        this.curveProtocol_registry_address_ETH = "0x90E00ACe148ca3b23Ac1bC8C240C2a7Dd9c2d7f5" //Deprecated
+        this.curveProtocol_meta_pool_factory_address_ETH = "0xB9fC157394Af804a3578134A6585C0dc9cc990d4" //Deprecated
+        this.curveProtocol_crypto_pools_registry_address_ETH = "0x8F942C20D02bEfc377D41445793068908E2250D0" //Deprecated
+        this.curveProtocol_crypto_factory_two_address_ETH = "0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F" //Deprecated
+        this.curveProtocol_triCrypto_factory_NG_address_ETH = "0x0c0e5f2fF0ff18a3be9b835635039256dC4B4963" //Deprecated
+        this.curveProtocolAddressProvider_ETH = "0x5ffe7FB82894076ECB99A30D6A32e969e6e35E98"
     }
 
 
@@ -1030,6 +1031,65 @@ class crawler{
         }
     }
 
+    /**
+     * From the address provider contract, gets the contract that can be used to get
+     * the curve pools for a trading pair. Then uses that to fetch the pool addresses.
+     * @param {String} token0Address - First toke's contract address
+     * @param {String} token1Address - Second toke's contract address
+     * @returns {array} An array of trading pool objects. If an error has occurred, returns 
+     *  an object with a message key, indicating the error message. If no pools are found
+     *  returns an object with msg key, indicating that no pools were found.
+     */
+    async curveProtocolCrawler_ETH(token0Address, token1Address){
+        // Load ABIs
+        const addressProviderABI = await loadABI(join(getDirPath(), "./ABIs/curveProtocolAddressProvider_ETH.json"))
+        const addressProvider = new this.web3.eth.Contract(addressProviderABI, this.curveProtocolAddressProvider_ETH)
+
+        // Per curve protocol docs, we use index 7 to get the meta registry address
+        const metaRegistryAddress = await addressProvider.methods.get_address(7).call()
+        
+        const metaRegistryABI = await loadABI(join(getDirPath(), "./ABIs/curveProtocolMetaRegistry_ETH.json"))
+        const metaRegistry = await new this.web3.eth.Contract(metaRegistryABI, metaRegistryAddress)
+        const _pools = await metaRegistry.methods.find_pools_for_coins(token0Address, token1Address).call()
+        let balance, coins, poolName, poolCoins
+        let pools = []
+
+        for(const address of _pools){
+            coins = undefined
+            poolCoins = []
+            poolName = undefined
+            balance = await metaRegistry.methods.get_balances(address).call()
+
+            coins = await metaRegistry.methods.get_coins(address).call()
+            try{
+                coins = await metaRegistry.methods.get_coins(address).call()
+                for(const coin of coins){
+                    if(coin !== '0x0000000000000000000000000000000000000000'){
+                        poolCoins.push(coin)
+                    }
+                }
+            } catch {coins = null}
+
+            try{poolName = await metaRegistry.methods.get_pool_name(address).call()} catch {poolName = null}
+
+            if(balance[0] !== 0n){
+                pools.push(
+                    {   
+                        exchange: "curveProtocol",
+                        address: address, 
+                        type: poolName || "unknown", 
+                        extraInfo: {coins: poolCoins.length > 0 ? poolCoins : null}
+                    }
+                )
+            }
+        }
+
+        if(pools.length === 0){
+            return {"msg": "No pools found"}
+        }
+
+        return pools
+    }
 
     /**
      * Gets all possible trading pairs from Curve protocol ethereum mainnet. It uses
@@ -1045,7 +1105,7 @@ class crawler{
      *  an object with a message key, indicating the error message. If no pools are found
      *  returns an object with msg key, indicating that no pools were found.
      */
-    async curveProtocolCrawler_ETH(token0Address, token1Address){
+    async curveProtocolCrawler_ETH_DEPRECATED(token0Address, token1Address){
         // Load ABIs
         const curveProtocolRegistry_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolRegistry_ETH.json"))
         const curveProtocolMetaPoolFactory_ABI = await loadABI(join(getDirPath(), "./ABIs/curveprotocolMetaPoolFactory_ETH.json"))
@@ -1147,7 +1207,7 @@ const sushiV3Pool = "0x01b94ac1abf25c132bced6918513f1822d0dc52f"
 
 // console.log(await _ethHandler.getPoolInfo_offline("0x72c2178E082feDB13246877B5aA42ebcE1b72218", "eth", app.locals.dbPool, ["contract_address", "token0", "token1"]))
 // console.log(await _ethHandler.getPoolInfo_sushiswap_V2(sushiV3Pool))
-// const v = await crawlerHandler.curveProtocolCrawler_ETH("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "0x6B175474E89094C44Da98b954EedeAC495271d0F")
+// const v = await crawlerHandler.curveProtocolCrawler_ETH("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
 // console.log(v)
 // const p = await _ethHandler.getPoolPriceByEvents(
 //     "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852", 

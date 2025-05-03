@@ -97,29 +97,54 @@ function updateLimiterStats() {
                         uptimeText = formatUptime(uptimeMs);
                     }
                     
-                    if (extraInfo.alchemyLimiterStats) {
-                        const stats = extraInfo.alchemyLimiterStats
-                        
-                        // Make sure all rows are visible first
-                        document.querySelectorAll('#limiter-stats-content .stat-row').forEach(row => {
-                            row.style.display = 'flex'
-                        })
-                        
-                        // Remove any existing message
-                        const messageEl = document.querySelector('#limiter-stats-content .stats-message')
-                        if (messageEl) messageEl.remove()
-                        
-                        // Update each specific stat row
-                        document.querySelector('#stat-task-id .stat-value').textContent = runningTask.id || 'Unknown'
-                        document.querySelector('#stat-queued .stat-value').textContent = stats.queued || 0
-                        document.querySelector('#stat-dropped .stat-value').textContent = stats.dropped || 0
-                        document.querySelector('#stat-running .stat-value').textContent = stats.running || 0
-                        document.querySelector('#stat-completed .stat-value').textContent = stats.completed || 0
-                        document.querySelector('#stat-avg-time .stat-value').textContent = 
-                            stats.averageExecutionTime ? Math.round(stats.averageExecutionTime) + 'ms' : '0ms'
-                        document.querySelector('#stat-uptime .stat-value').textContent = uptimeText
-                    } else {
-                        resetStatsDisplay('No limiter stats available')
+                    // Update task info
+                    document.querySelector('#stat-task-id .stat-value').textContent = runningTask.id || 'Unknown'
+                    document.querySelector('#stat-uptime .stat-value').textContent = uptimeText
+                    
+                    // Clear any existing message
+                    const messageEl = document.querySelector('.session-popup-content .stats-message')
+                    if (messageEl) messageEl.remove()
+                    
+                    // Get the limiters container
+                    const limitersContainer = document.getElementById('limiters-container')
+                    
+                    // Clear previous limiter stats
+                    limitersContainer.innerHTML = ''
+                    
+                    if(extraInfo.limiterStats){
+                        // Check if there are any limiter objects in extraInfo.limiterStats
+                        const limiterKeys = Object.keys(extraInfo.limiterStats) || 0
+
+                        if (limiterKeys.length > 0) {
+                            // For each limiter in extraInfo, create a section
+                            limiterKeys.forEach(limiterKey => {
+                                const limiterStats = extraInfo.limiterStats[limiterKey]
+                                const limiterName = limiterKey.replace('LimiterStats', '')
+                                
+                                // Create a new limiter section
+                                const limiterSection = document.createElement('div')
+                                limiterSection.className = 'session-popup-item limiter-stats'
+                                limiterSection.innerHTML = `
+                                    <h5>${limiterName} Requests</h5>
+                                    <div class="limiter-stats-content">
+                                        <div class="stat-row"><span class="stat-label">Queued:</span> <span class="stat-value">${limiterStats.queued || 0}</span></div>
+                                        <div class="stat-row"><span class="stat-label">Dropped:</span> <span class="stat-value">${limiterStats.dropped || 0}</span></div>
+                                        <div class="stat-row"><span class="stat-label">Running:</span> <span class="stat-value">${limiterStats.running || 0}</span></div>
+                                        <div class="stat-row"><span class="stat-label">Completed:</span> <span class="stat-value">${limiterStats.completed || 0}</span></div>
+                                        <div class="stat-row"><span class="stat-label">Avg Time:</span> <span class="stat-value">${limiterStats.averageExecutionTime ? Math.round(limiterStats.averageExecutionTime) + 'ms' : '0ms'}</span></div>
+                                    </div>
+                                `
+                                
+                                // Add the limiter section to the container
+                                limitersContainer.appendChild(limiterSection)
+                            })
+                        } else {
+                            // No limiter stats available
+                            const noLimitersMsg = document.createElement('div')
+                            noLimitersMsg.className = 'stats-message'
+                            noLimitersMsg.textContent = 'No limiter stats available'
+                            limitersContainer.appendChild(noLimitersMsg)
+                        }
                     }
                 } else {
                     resetStatsDisplay('No running tasks')
@@ -150,43 +175,26 @@ function updateLimiterStats() {
     
     // Helper function to reset stats display
     function resetStatsDisplay(message) {
+        // Update task info
+        document.querySelector('#stat-task-id .stat-value').textContent = 'None'
+        document.querySelector('#stat-uptime .stat-value').textContent = '0s'
+        
+        // Clear limiters container
+        const limitersContainer = document.getElementById('limiters-container')
+        limitersContainer.innerHTML = ''
+        
         if (message) {
-            // If there's an error message, show it
-            const rows = document.querySelectorAll('#limiter-stats-content .stat-row')
-            if (rows.length > 0) {
-                // Hide all rows
-                rows.forEach(row => row.style.display = 'none')
-                
-                // Add message
-                const messageEl = document.createElement('div')
-                messageEl.textContent = message
-                messageEl.className = 'stats-message'
-                
-                const container = document.getElementById('limiter-stats-content')
-                // Clear any existing messages
-                const existingMsg = container.querySelector('.stats-message')
-                if (existingMsg) container.removeChild(existingMsg)
-                
-                container.appendChild(messageEl)
-            }
-        } else {
-            // Reset all values to 0
-            document.querySelector('#stat-task-id .stat-value').textContent = 'None'
-            document.querySelector('#stat-queued .stat-value').textContent = '0'
-            document.querySelector('#stat-dropped .stat-value').textContent = '0'
-            document.querySelector('#stat-running .stat-value').textContent = '0'
-            document.querySelector('#stat-completed .stat-value').textContent = '0'
-            document.querySelector('#stat-avg-time .stat-value').textContent = '0ms'
-            document.querySelector('#stat-uptime .stat-value').textContent = '0s'
+            // Add message
+            const messageEl = document.createElement('div')
+            messageEl.textContent = message
+            messageEl.className = 'stats-message'
             
-            // Show all rows - explicitly set display to flex to override any previous 'none' setting
-            document.querySelectorAll('#limiter-stats-content .stat-row').forEach(row => {
-                row.style.display = 'flex'
-            })
+            // Clear any existing messages
+            const existingMsg = document.querySelector('.session-popup-content .stats-message')
+            if (existingMsg) existingMsg.remove()
             
-            // Remove any message
-            const messageEl = document.querySelector('#limiter-stats-content .stats-message')
-            if (messageEl) messageEl.remove()
+            // Add message to limiters container
+            limitersContainer.appendChild(messageEl)
         }
     }
 

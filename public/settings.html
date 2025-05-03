@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+    <title>Arbitrager Settings</title>
+</head>
+<body>
+    <!-- Include the top menu script -->
+    <script src="./scripts/include-top-panel.js" type="module"></script>
+
+    <div class="settings-container">
+        <div class="settings-section">
+            <h2>Blacklisted Addresses</h2>
+            <p>Add addresses to blacklist them from appearing in the arbitrage opportunities.</p>
+            
+            <form id="blacklist-form" class="blacklist-form">
+                <input type="text" id="address" placeholder="Contract Address" required>
+                <select id="chain" required>
+                    <option value="">Select Chain</option>
+                    <!-- Chain options will be loaded dynamically -->
+                </select>
+                <button type="submit">Add to Blacklist</button>
+            </form>
+            
+            <table class="blacklist-table">
+                <thead>
+                    <tr>
+                        <th class = "address">Address</th>
+                        <th class = "chain">Chain</th>
+                        <th class = "actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="blacklist-table-body">
+                    <!-- Blacklisted addresses will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        // Function to load unique chains from the /pairs route
+        async function loadChains() {
+            try {
+                const response = await fetch('/pairs')
+                const data = await response.json()
+                
+                if (data.status === 'success') {
+                    const chainSelect = document.getElementById('chain')
+                    
+                    // Get unique chain names
+                    const uniqueChains = [...new Set(data.data.pairs.map(pair => pair.blockchain))]
+                    
+                    // Sort chains alphabetically
+                    uniqueChains.sort()
+                    
+                    // Clear existing options except the first one
+                    while (chainSelect.options.length > 1) {
+                        chainSelect.remove(1)
+                    }
+                    
+                    // Add chain options
+                    uniqueChains.forEach(chain => {
+                        const option = document.createElement('option')
+                        option.value = chain
+                        option.textContent = chain // Capitalize first letter
+                        chainSelect.appendChild(option)
+                    })
+                }
+            } catch (error) {
+                console.error('Error loading chains:', error)
+            }
+        }
+        
+        // Function to load blacklisted addresses
+        async function loadBlacklist() {
+            try {
+                const response = await fetch('/settings/blacklist')
+                const data = await response.json()
+                
+                if (data.status === 'success') {
+                    const tableBody = document.getElementById('blacklist-table-body')
+                    tableBody.innerHTML = ''
+                    
+                    data.data.forEach(item => {
+                        const row = document.createElement('tr')
+                        row.innerHTML = `
+                            <td>${item.address}</td>
+                            <td>${item.chain}</td>
+                            <td>
+                                <button class="remove-btn" data-id="${item.address}-${item.chain}">Remove</button>
+                            </td>
+                        `
+                        tableBody.appendChild(row)
+                    })
+                    
+                    // Add event listeners to remove buttons
+                    document.querySelectorAll('.remove-btn').forEach(button => {
+                        button.addEventListener('click', removeBlacklistItem)
+                    })
+                }
+            } catch (error) {
+                console.error('Error loading blacklist:', error)
+            }
+        }
+        
+        // Function to add a new blacklisted address
+        async function addBlacklistItem(event) {
+            event.preventDefault()
+            
+            const address = document.getElementById('address').value
+            const chain = document.getElementById('chain').value
+            
+            // Validate inputs before sending
+            if (!address || !chain) {
+                alert('Please provide both address and chain')
+                return
+            }
+            
+            try {
+                
+                const response = await fetch(`/settings/blacklist/${chain}/${address}`, {
+                    method: 'POST',
+                })
+                
+                const data = await response.json()
+                
+                if (data.status === 'success') {
+                    // Clear form and reload blacklist
+                    document.getElementById('address').value = ''
+                    document.getElementById('chain').value = ''
+                    loadBlacklist()
+                } else {
+                    // More detailed error message
+                    const errorMsg = data.data && data.data.msg 
+                        ? data.data.msg 
+                        : 'Unknown error occurred'
+                    alert(`Error: ${errorMsg}`)
+                }
+            } catch (error) {
+                console.error('Error adding to blacklist:', error)
+                alert(`Failed to add address to blacklist: ${error.message}`)
+            }
+        }
+        
+        // Function to remove a blacklisted address
+        async function removeBlacklistItem(event) {
+            const id = event.target.getAttribute('data-id')
+            const [address, chain] = id.split('-')
+            try {
+                const response = await fetch(`/settings/blacklist/${chain}/${address}`, {
+                    method: 'DELETE'
+                })
+                
+                const data = await response.json()
+                
+                if (data.status === 'success') {
+                    loadBlacklist()
+                } else {
+                    alert(`Error: ${data.data.msg}`)
+                }
+            } catch (error) {
+                console.error('Error removing from blacklist:', error)
+                alert('Failed to remove address from blacklist')
+            }
+        }
+        
+        // Add event listener to form
+        document.getElementById('blacklist-form').addEventListener('submit', addBlacklistItem)
+        
+        // Load chains and blacklist when page loads
+        loadChains()
+        loadBlacklist()
+    </script>
+</body>
+</html>

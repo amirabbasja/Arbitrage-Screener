@@ -59,6 +59,18 @@ if(! await databaseUtils.checkTableExists("tokens", dbPool, "public")){
     await databaseUtils.createTable("tokens", dbPool, _query)
 }
 
+// Create blacklist table if doesn't exist
+if(! await databaseUtils.checkTableExists("blacklist", dbPool, "public")){
+    const _query = 
+        `
+            address VARCHAR(255) NOT NULL,
+            chain VARCHAR(255) NOT NULL,
+            PRIMARY KEY (address, chain)
+        `
+    await databaseUtils.createTable("blacklist", dbPool, _query)
+    console.log("Blacklist table created successfully")
+}
+
 // Check if TimescaleDB extension is installed and create prices table
 try {
     // Check if TimescaleDB extension exists
@@ -124,9 +136,11 @@ try {
             const pricesTableQuery = `
                 CREATE TABLE prices (
                     asset_name VARCHAR(255) NOT NULL,
+                    chain VARCHAR(255) NOT NULL,
                     time TIMESTAMPTZ NOT NULL,
                     contract_address VARCHAR(255) NOT NULL,
-                    exchange VARCHAR(255) NOT NULL,
+                    exchange_name VARCHAR(255) NOT NULL,
+                    exchange_version VARCHAR(255) NOT NULL,
                     price NUMERIC NOT NULL
                 );
             `

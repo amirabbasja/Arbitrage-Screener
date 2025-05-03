@@ -21,16 +21,54 @@ quotesRouter.get("/:chain/:exchange/:address",
             const address = req.params.address 
             const chain = req.params.chain
             const exchangeName = req.params.exchange.split("_")[0]
-            const exchangeVersion = req.params.exchange.split("_")[1]
-            const taskId = req.query.taskId // Optional variable)
-            
+            const exchangeVersion = req.params.exchange.split("_")[1] || "unknown"
+            const taskId = req.query.taskId // Optional variable
+
             try{
                 // TODO: Add a section that checks if exchange name is valid
 
+                // check to see if the address is blacklisted
+                const isBlacklisted = await databaseUtils.getEntry("blacklist", { address, chain }, app.locals.dbPool)
+                if (isBlacklisted) {
+                    return res.status(200).json({
+                        status: "success",
+                        data: {
+                            msg: "The address is blacklisted"
+                        }
+                    })
+                } 
+
                 let quote, poolInfo
                 
-                // Will throw an error 
-                quote = await handler_ETH[`getPoolPrice_${exchangeName}_${exchangeVersion}`](address)
+                try{
+                    quote = await handler_ETH[`getPoolPrice_${exchangeName}_${exchangeVersion}`](address)
+                }catch(err){
+                    try{
+                        // Try for exchanges that don't have a version (CEX or DEX)
+                        quote = await handler_ETH[`getPoolPrice_${exchangeName}`](address)
+                    }catch(err){
+                        throw err
+                    }
+                }
+                
+                // Add the acquired price to prices database
+                if (quote !== null && quote !== undefined) {
+                    try {
+                        // Use ISO string format for the timestamp to avoid timezone issues
+                        const currentTime = new Date().toISOString();
+                        await dbUtils.addRow("prices", {
+                            asset_name: quote.symbol,
+                            chain: chain,
+                            time: currentTime,
+                            contract_address: address,
+                            exchange_name: exchangeName,
+                            exchange_version: exchangeVersion,
+                            price: quote.price
+                        }, app.locals.dbPool)
+                    } catch (priceErr) {
+                        console.error(`Failed to add price to timeseries: ${priceErr.message}`)
+                    }
+                }
 
                 res.status(200).json({
                     status: "success",
@@ -43,7 +81,7 @@ quotesRouter.get("/:chain/:exchange/:address",
                     }
                 })
             } catch(err){
-                console.log(`getPoolPrice_${exchangeName}_${exschangeVersion}`, err)
+                
                 res.status(500).json({
                     status: "error",
                     data: {
@@ -57,7 +95,7 @@ quotesRouter.get("/:chain/:exchange/:address",
                     }
                 })
             }
-        }
+        },
     )
 )
 

@@ -112,10 +112,25 @@ async function fetchQuotes(taskId) {
     try{
         // Get all pairs that need to be fetched
         let pairs = await databaseUtils.getTableAsJson("pairs", app.locals.dbPool)
-        pairs = batchByProperty(pairs, "blockchain")
+
+        let filteredPairs = await Promise.all(
+            pairs.map(async (pair) => {
+                const isBlacklisted = await databaseUtils.getEntry("blacklist", { address: pair.contract_address, chain: pair.blockchain }, app.locals.dbPool)
+
+                if(isBlacklisted){
+                    return null
+                }else{
+                    return pair
+                }
+            })
+        ).then((results) => {
+            return results.filter(pair => pair !== null)
+        })
+
+        filteredPairs = batchByProperty(filteredPairs, "blockchain")
 
         // Set up a different loop for each blockchain
-        const ethCatcher = (taskId) => requestSender(pairs["eth"], taskId)
+        const ethCatcher = (taskId) => requestSender(filteredPairs["eth"], taskId)
 
         // Run the loops
         const intervals = await setupLoops([10000], [ethCatcher], taskId)

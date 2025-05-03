@@ -16,7 +16,8 @@ import {indexRouter} from "./src/routes/index.js"
 import { quotesRouter } from "./src/routes/quote.js"
 import { pairsRouter } from "./src/routes/pairs.js"
 import { helpRouter } from "./src/routes/help.js"
-import { requestStatusRouter } from "./src/routes/requestStatus.js"
+import { requestStatusRouter } from "./src/routes/stats.js"
+import { settingsRouter } from "./src/routes/blacklist.js"
 
 // Cleanup running tasks in the database
 if(await  databaseUtils.checkTableExists("tasks", app.locals.dbPool, "public")){
@@ -79,6 +80,7 @@ app.use("/quote", quotesRouter)
 app.use("/pairs", pairsRouter)
 app.use("/help", helpRouter)
 app.use("/status", requestStatusRouter)
+app.use("/settings", settingsRouter)
 
 // Server setup
 const port = process.env.port || 3000

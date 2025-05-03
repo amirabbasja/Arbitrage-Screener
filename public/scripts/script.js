@@ -8,18 +8,18 @@ function formatNumber(num) {
     if (num === "ERR") { return "ERR" }
 
     // If the number is zero, return it as is
-    if (num === 0) return '0';
+    if (num === 0) return '0'
     
     // Get the absolute value to handle negative numbers
-    const absNum = Math.abs(num);
+    const absNum = Math.abs(num)
 
     // Check if the number is very small (less than 0.0001)
     if (absNum < 0.0001) {
         // Use scientific notation with 4 significant digits
-        return num.toExponential(3); // 3 decimal places + 1 digit before decimal = 4 significant digits
+        return num.toExponential(3) // 3 decimal places + 1 digit before decimal = 4 significant digits
     } else {
         // For regular numbers, use toFixed to get 4 decimal places
-        return parseFloat(parseFloat(num).toFixed(4)).toString();
+        return parseFloat(parseFloat(num).toFixed(4)).toString()
     }
 }
 
@@ -28,26 +28,32 @@ function formatNumber(num) {
  * @param {Array} array - Array of objects to batch
  * @param {string} prop1 - First property to match
  * @param {string} prop2 - Second property to match
- * @returns {Array} Array of batched object groups
+ * @returns {Array} Array of batched object groups sorted alphabetically
  */
 function batchObjectsByProperties(array, prop1, prop2) {
     // Create a map to store batches
-    const batches = new Map();
+    const batches = new Map()
 
     // Group objects by the combination of both properties
     array.forEach(obj => {
         // Create a unique key based on both properties
-        const key = `${obj[prop1]}_${obj[prop2]}`;
+        const key = `${obj[prop1]}_${obj[prop2]}`
 
         if (!batches.has(key)) {
-            batches.set(key, []);
+            batches.set(key, [])
         }
 
-        batches.get(key).push(obj);
-    });
+        batches.get(key).push(obj)
+    })
 
-    // Convert map values to array
-    return Array.from(batches.values());
+    // Convert map to array of [key, value] pairs
+    const batchEntries = Array.from(batches.entries())
+    
+    // Sort the entries alphabetically by the key (which contains prop1_prop2)
+    batchEntries.sort((a, b) => a[0].localeCompare(b[0]))
+    
+    // Return just the values (the batched groups) in the sorted order
+    return batchEntries.map(entry => entry[1])
 }
 
 /**
@@ -59,32 +65,32 @@ async function populatePairTables() {
     // Function to copy table cell ID to clipboard
     function setupCellIdCopy() {
         // Create popup element if it doesn't exist
-        let popup = document.getElementById('copy-popup');
+        let popup = document.getElementById('copy-popup')
         if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'copy-popup';
-        popup.style.position = 'fixed';
-        popup.style.bottom = '20px';
-        popup.style.right = '20px';
-        popup.style.backgroundColor = '#333';
-        popup.style.color = 'white';
-        popup.style.padding = '10px 15px';
-        popup.style.borderRadius = '4px';
-        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-        popup.style.opacity = '0';
-        popup.style.transition = 'opacity 0.3s ease-in-out';
-        popup.style.zIndex = '9999';
-        document.body.appendChild(popup);
+        popup = document.createElement('div')
+        popup.id = 'copy-popup'
+        popup.style.position = 'fixed'
+        popup.style.bottom = '20px'
+        popup.style.right = '20px'
+        popup.style.backgroundColor = '#333'
+        popup.style.color = 'white'
+        popup.style.padding = '10px 15px'
+        popup.style.borderRadius = '4px'
+        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+        popup.style.opacity = '0'
+        popup.style.transition = 'opacity 0.3s ease-in-out'
+        popup.style.zIndex = '9999'
+        document.body.appendChild(popup)
         }
 
         // Get all table cells
-        const cells = document.querySelectorAll('td');
+        const cells = document.querySelectorAll('td')
         
         // Add click event listener to each cell
         cells.forEach(cell => {
         cell.addEventListener('click', function() {
             // Get the cell's ID
-            let cellId = this.querySelector("span");
+            let cellId = this.querySelector("span")
             
             if (cellId) {
             // Copy to clipboard
@@ -92,42 +98,57 @@ async function populatePairTables() {
                 navigator.clipboard.writeText(cellId.split("_")[1])
                     .then(() => {
                         // Visual feedback on the cell
-                        const originalBg = this.style.backgroundColor;
-                        this.style.backgroundColor = '#e6ffe6'; // Light green flash
+                        const originalBg = this.style.backgroundColor
+                        this.style.backgroundColor = '#e6ffe6' // Light green flash
                         
                         // Reset background after a short delay
                         setTimeout(() => {
-                            this.style.backgroundColor = originalBg;
-                        }, 300);
+                            this.style.backgroundColor = originalBg
+                        }, 300)
                         
                         // Show popup notification
-                        popup.textContent = `Copied contract address: ${cellId.split("_")[1]}`;
-                        popup.style.opacity = '1';
+                        popup.textContent = `Copied contract address: ${cellId.split("_")[1]}`
+                        popup.style.opacity = '1'
                         
                         // Hide popup after 2 seconds
                         setTimeout(() => {
-                            popup.style.opacity = '0';
-                        }, 2000);
+                            popup.style.opacity = '0'
+                        }, 2000)
                         
-                        // console.log('Cell ID copied to clipboard: ' + cellId);
+                        // console.log('Cell ID copied to clipboard: ' + cellId)
                     })
                     .catch(err => {
-                        // console.error('Failed to copy cell ID: ', err);
-                    });
+                        // console.error('Failed to copy cell ID: ', err)
+                    })
             } else {
-                // console.warn('This cell has no ID');
+                // console.warn('This cell has no ID')
             }
-        });
-    });
+        })
+    })
     }
     
     // Make the request to get all the table "pairs" as a big JSON object
     const response = await (await fetch("/pairs")).json()
     const data = response.data
 
+    let filteredPairs = await Promise.all(
+        data.pairs.map(async (pair) => {
+            const response = await fetch(`/settings/blacklist/${pair.blockchain}/${pair.contract_address}`)
+                .then(res => res.json())
+
+            if(response.data.isBlacklisted){
+                return null
+            }else{
+                return pair
+            }
+        })
+    ).then((results) => {
+        return results.filter(pair => pair !== null)
+    })
+
     // Batch the assets that have the same token0 and token1
-    const assets = batchObjectsByProperties(data.pairs, "token0", "token1")
-    console.log(assets)
+    const assets = batchObjectsByProperties(filteredPairs, "token0", "token1")
+    
     // Define the html
     let _html = ""
     let tableHtml = ""
@@ -164,7 +185,6 @@ async function populatePairTables() {
     document.body.appendChild(tableContainer)
     
     setupCellIdCopy()
-    console.log("finished")
 }
 
 /**
@@ -206,13 +226,6 @@ async function updateQuotes(){
 }
 
 /**
- * By always checking the database, it updates the table cells with new quotes
- */
-async function quotesUpdater() {
-    
-}
-
-/**
  * Checks if the quote fetcher script is running or not, If so, change the button style
  */
 async function startBtnLoad(){
@@ -234,5 +247,4 @@ async function startBtnLoad(){
 
 document.addEventListener("topMenuLoaded", updateQuotes)
 window.addEventListener('load', populatePairTables)
-window.addEventListener("load", quotesUpdater)
 window.addEventListener("load", startBtnLoad)

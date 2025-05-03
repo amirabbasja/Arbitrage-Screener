@@ -59,7 +59,6 @@
 
         socket.on('table_update', (data) => {
             const element = document.getElementById(`${data.new_data.blockchain}_${data.new_data.contract_address}`);
-            // updateCellWithHighlight(cellElement, formatNumber(data.new_data.latest_quote.price))
 
             if(formatNumber(data.new_data.latest_quote.price) !== element.innerText){
                 element.innerText = formatNumber(data.new_data.latest_quote.price)
@@ -67,15 +66,13 @@
                 // Add a red color to quotes that return "ERR"
                 if(element.innerText == "ERR"){
                     element.style.color = "red";
+                }else{
+                    element.style.color = "black";
                 }
 
                 highlightCell(element);
             }
         });
-
-        // socket.on('error', (error) => {
-        //     console.error('WebSocket error:', error);
-        // })
 
     </script>
 </body>

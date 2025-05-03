@@ -1,55 +1,82 @@
 // A script that limits the number of requests per minute
 import Bottleneck from "bottleneck"
 import dbUtils from "./dbUtils.js"
+import { el } from "date-fns/locale"
 
-const alchemyLimiter = new Bottleneck({
-    maxConcurrent: 1, // Maximum number of simultaneous requests
-    minTime: 0, // The minimum time (in milliseconds) that should elapse between the start of two consecutive tasks
-    reservoir: 200, // Initial number of requests allowed
-    reservoirRefreshAmount: 100, // Number of requests refreshed
-    reservoirRefreshInterval: 60 * 1000, // Refresh interval (1 minute in milliseconds)
-    highWater: 200, // Maximum size of the queue
-    strategy: Bottleneck.strategy.LEAK, // What to do when the queue reaches highWater (LEAK, OVERFLOW, BLOCK)
-    timeout: 5000, // How long (in ms) a job can be pending before it's rejected
-})
-
-const alchemyLimiterStats = {
-    queued: 0,
-    running: 0,
-    completed: 0,
-    dropped: 0,
-    lastExecutionTime: null,
-    averageExecutionTime: 0
-}
-
-// Add a cache to track in-flight requests
+// Store all limiters in a map
+const limiters = new Map()
+const limiterStats = new Map()
 const inFlightRequests = new Map()
 
-// Set up event listeners to track stats
-alchemyLimiter.on('queued', () => {
-    alchemyLimiterStats.queued++
-})
+// Function to create a new limiter with custom configuration
+function createLimiter(name, config = {}) {
 
-alchemyLimiter.on('executing', () => {
-    alchemyLimiterStats.queued--
-    alchemyLimiterStats.running++
-})
-
-alchemyLimiter.on('done', (info) => {
-    alchemyLimiterStats.running--
-    alchemyLimiterStats.completed++
+    // Merge default with provided config
+    const limiterConfig = {...config }
     
-    // Track execution time
-    alchemyLimiterStats.lastExecutionTime = info.duration
+    // Create the limiter
+    const limiter = new Bottleneck(limiterConfig)
     
-    // Calculate running average
-    alchemyLimiterStats.averageExecutionTime = 
-        (alchemyLimiterStats.averageExecutionTime * (alchemyLimiterStats.completed - 1) + info.duration) / 
-        alchemyLimiterStats.completed
+    // Initialize stats for this limiter
+    const stats = {
+        queued: 0,
+        running: 0,
+        completed: 0,
+        dropped: 0,
+        lastExecutionTime: null,
+        averageExecutionTime: 0
+    }
+    
+    // Set up event listeners to track stats
+    limiter.on('queued', () => {
+        stats.queued++
+    })
+
+    limiter.on('executing', () => {
+        stats.queued--
+        stats.running++
+    })
+
+    limiter.on('done', (info) => {
+        stats.running--
+        stats.completed++
+        
+        // Calculate running average
+        stats.averageExecutionTime = 0
+    })
+
+    limiter.on('dropped', () => {
+        stats.dropped++
+    })
+    
+    // Store the limiter and its stats
+    limiters.set(name, limiter)
+    limiterStats.set(name, stats)
+    
+    return limiter
+}
+
+// Create the default Alchemy limiter
+createLimiter('alchemy-RPC', {
+    maxConcurrent: 1,
+    minTime: 0,
+    reservoir: 200,
+    reservoirRefreshAmount: 100,
+    reservoirRefreshInterval: 60 * 1000,
+    highWater: 200,
+    strategy: Bottleneck.strategy.LEAK,
+    timeout: 5000,
 })
 
-alchemyLimiter.on('dropped', () => {
-    alchemyLimiterStats.dropped++
+createLimiter('curve-API', {
+    maxConcurrent: 1,
+    minTime: 1000 / 20, // 20 requests per second
+    reservoir: 200,
+    reservoirRefreshAmount: 100,
+    reservoirRefreshInterval: 60 * 1000,
+    highWater: 200,
+    strategy: Bottleneck.strategy.LEAK,
+    timeout: 5000,
 })
 
 // Helper function to generate a unique request key
@@ -62,13 +89,34 @@ function generateRequestKey(req) {
     return `${path}|${query}|${body}`
 }
 
-async function rateLimitMiddleware(handler){
+// Updated middleware that accepts a limiter name
+async function rateLimitMiddleware(handler) {
     return async (req, res, next) => {
+        let limiterName
+        
+        // Set the limiter name according to the exchange
+        const exchangeName = req.params.exchange.split("_")[0]
+        if(exchangeName === "curveProtocol"){
+            limiterName = "curve-API"
+        }else{
+            limiterName = "alchemy-RPC"
+        }
+
         try {
+            const limiter = limiters.get(limiterName)
+            
+            if (!limiter) {
+                return res.status(500).json({ 
+                    error: 'Limiter configuration error', 
+                    message: `Limiter "${limiterName}" not found` 
+                })
+            }
+            
+            const stats = limiterStats.get(limiterName)
             const taskId = req.query.taskId || null
             
             // Generate a unique key for this request
-            const requestKey = generateRequestKey(req)
+            const requestKey = `${limiterName}:${generateRequestKey(req)}`
             
             // Check if this request is already in flight
             if (inFlightRequests.has(requestKey)) {
@@ -77,17 +125,18 @@ async function rateLimitMiddleware(handler){
                     message: 'A similar request is already being processed' 
                 })
             }
+
             
             // If taskId is provided, update stats in the database before and after execution
             if (taskId) {
                 // Get current stats before execution
-                const statsBefore = { ...alchemyLimiterStats }
+                const statsBefore = { ...stats }
                 
                 // Add request to in-flight map
                 inFlightRequests.set(requestKey, Date.now())
                 
                 // Wrap the handler with Bottleneck
-                await alchemyLimiter.schedule(async () => {
+                await limiter.schedule(async () => {
                     try {
                         await handler(req, res, next)
                     } finally {
@@ -96,23 +145,26 @@ async function rateLimitMiddleware(handler){
                     }
 
                     // Check if stats have changed
-                    if (JSON.stringify(statsBefore) !== JSON.stringify(alchemyLimiterStats)) {
+                    if (JSON.stringify(statsBefore) !== JSON.stringify(stats)) {
                         try {
                             // Get the current task from database
                             const taskResult = await dbUtils.getEntry("tasks", { id: taskId }, req.app.locals.dbPool)
                             
                             if (taskResult) {
-                                // Parse existing extra_info or create new object
+                                // Parse existing taskResult.extra_info or create new object
                                 let extraInfo = {}
-                                try {
-                                    extraInfo = JSON.parse(taskResult.extra_info || '{}')
-                                } catch (e) {
-                                    extraInfo = {}
+                                if(taskResult.extra_info){
+                                    if(!taskResult.extra_info.limiterStats){
+                                        extraInfo = {limiterStats:{}}
+                                    } else {
+                                        extraInfo = taskResult.extra_info
+                                    }
+                                }else{
+                                    extraInfo = {limiterStats:{}}
                                 }
-                                
-                                // Update with latest stats
-                                extraInfo.alchemyLimiterStats = { ...alchemyLimiterStats }
-                                
+
+                                extraInfo.limiterStats[limiterName] = { ...stats }
+
                                 // Save back to database
                                 await dbUtils.updateRecords(
                                     "tasks", 
@@ -134,7 +186,7 @@ async function rateLimitMiddleware(handler){
                 inFlightRequests.set(requestKey, Date.now())
                 
                 // Regular execution without task tracking
-                await alchemyLimiter.schedule(async () => {
+                await limiter.schedule(async () => {
                     try {
                         await handler(req, res, next)
                     } finally {
@@ -164,4 +216,23 @@ setInterval(() => {
     }
 }, 60 * 1000) // Run cleanup every minute
 
-export {rateLimitMiddleware, alchemyLimiterStats}
+// Get stats for all limiters or a specific one
+function getLimiterStats(limiterName = null) {
+    if (limiterName) {
+        return limiterStats.get(limiterName) || null
+    }
+    
+    // Return all stats
+    const allStats = {}
+    for (const [name, stats] of limiterStats.entries()) {
+        allStats[name] = { ...stats }
+    }
+    return allStats
+}
+
+export { 
+    rateLimitMiddleware, 
+    createLimiter, 
+    getLimiterStats,
+    limiters
+}
