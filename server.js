@@ -33,6 +33,18 @@ if(await  databaseUtils.checkTableExists("tasks", app.locals.dbPool, "public")){
     throw new Error(`Tasks table doesn't exist. Run the install directory scripts first.`)
 }
 
+// Get the arguments
+let headless
+const args = process.argv.slice(2)
+
+if( args.length == 0 || args[0] !== "headless") {
+    headless = false
+    app.locals.headless = false
+}else{
+    headless = true
+    app.locals.headless = true
+}
+
 // Load .env files
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -53,24 +65,25 @@ if(await databaseUtils.checkTableExists("pairs", app.locals.dbPool, "public")){
     }
 }
 
-// Listen for PostgreSQL notifications
-const eventListenerClient = await app.locals.dbPool.connect()
-await eventListenerClient.query('LISTEN table_change')
+if(!headless){
+    // Listen for PostgreSQL notifications to update the UI
+    const eventListenerClient = await app.locals.dbPool.connect()
+    await eventListenerClient.query('LISTEN table_change')
 
-eventListenerClient.on('error', (err) => {
-    console.error('Event listener client error:', err.message)
-})
+    eventListenerClient.on('error', (err) => {
+        console.error('Event listener client error:', err.message)
+    })
 
-eventListenerClient.on('notification', (msg) => {
-    try {
-        const payload = JSON.parse(msg.payload)
-        io.emit('table_update', payload) // Broadcast to all connected clients
-    } catch (error) {
-        console.error("Error parsing or emitting payload to clients:", error)
-        console.error("Raw payload was:", msg.payload)
-    }
-})
-
+    eventListenerClient.on('notification', (msg) => {
+        try {
+            const payload = JSON.parse(msg.payload)
+            io.emit('table_update', payload) // Broadcast to all connected clients
+        } catch (error) {
+            console.error("Error parsing or emitting payload to clients:", error)
+            console.error("Raw payload was:", msg.payload)
+        }
+    })
+}
 // Middleware
 app.use(express.json())
 
@@ -86,5 +99,5 @@ app.use("/settings", settingsRouter)
 const port = process.env.port || 3000
 
 server.listen(port, () => {
-    console.log(`Server is listening on port ${port}...`)
+    headless ? console.log(`Headless Server is listening on port ${port}...`): console.log(`Server is listening on port ${port}...`)
 })

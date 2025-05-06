@@ -58,7 +58,7 @@ function batchObjectsByProperties(array, prop1, prop2) {
 
 /**
  * Makes the necessary tables in html so that they can later be populated 
- * with quotes
+ * with quotes. Only runs if the app is not ran on headless mode
  */
 async function populatePairTables() {
     
@@ -127,64 +127,69 @@ async function populatePairTables() {
     })
     }
     
-    // Make the request to get all the table "pairs" as a big JSON object
-    const response = await (await fetch("/pairs")).json()
-    const data = response.data
+    // check to see if the app is running on headless mode (no UI updates)
+    const headlessMode = await fetch("/status").then(res => res.json()).then(res => res.data.headless)
+    
+    if( ! headlessMode ){
+        // Make the request to get all the table "pairs" as a big JSON object
+        const response = await (await fetch("/pairs")).json()
+        const data = response.data
 
-    let filteredPairs = await Promise.all(
-        data.pairs.map(async (pair) => {
-            const response = await fetch(`/settings/blacklist/${pair.blockchain}/${pair.contract_address}`)
-                .then(res => res.json())
+        let filteredPairs = await Promise.all(
+            data.pairs.map(async (pair) => {
+                const response = await fetch(`/settings/blacklist/${pair.blockchain}/${pair.contract_address}`)
+                    .then(res => res.json())
 
-            if(response.data.isBlacklisted){
-                return null
-            }else{
-                return pair
-            }
+                if(response.data.isBlacklisted){
+                    return null
+                }else{
+                    return pair
+                }
+            })
+        ).then((results) => {
+            return results.filter(pair => pair !== null)
         })
-    ).then((results) => {
-        return results.filter(pair => pair !== null)
-    })
 
-    // Batch the assets that have the same token0 and token1
-    const assets = batchObjectsByProperties(filteredPairs, "token0", "token1")
-    
-    // Define the html
-    let _html = ""
-    let tableHtml = ""
+        // Batch the assets that have the same token0 and token1
+        const assets = batchObjectsByProperties(filteredPairs, "token0", "token1")
+        
+        // Define the html
+        let _html = ""
+        let tableHtml = ""
 
-    // Add tables
-    for (let i = 0; i < assets.length; i++) {
-        tableHtml = `<table class="centered-table" id="table-${assets[i][0].token0.toUpperCase()}-${assets[i][0].token1.toUpperCase()}">\n`
+        // Add tables
+        for (let i = 0; i < assets.length; i++) {
+            tableHtml = `<table class="centered-table" id="table-${assets[i][0].token0.toUpperCase()}-${assets[i][0].token1.toUpperCase()}">\n`
 
-        // Add headers
-        tableHtml += `\t<tr>\n`
-        tableHtml += `\t\t<th>Asset Name</th>\n`
-        for(let j = 0; j < assets[i].length; j++){
-            tableHtml += `\t\t<th class="table-header">${assets[i][j].exchange}_${assets[i][j].exchange_type}<br>(${assets[i][j].blockchain})</th>\n`
+            // Add headers
+            tableHtml += `\t<tr>\n`
+            tableHtml += `\t\t<th>Asset Name</th>\n`
+            for(let j = 0; j < assets[i].length; j++){
+                tableHtml += `\t\t<th class="table-header">${assets[i][j].exchange}_${assets[i][j].exchange_type}<br>(${assets[i][j].blockchain})</th>\n`
+            }
+            tableHtml += `\t</tr>\n`
+
+            // Add rows
+            tableHtml += `\t<tr>\n`
+            tableHtml += `\t\t<td>${assets[i][0].base_asset.toUpperCase()}/${assets[i][0].quote_asset.toUpperCase()}</td>\n`
+            for(let j = 0; j < assets[i].length; j++){
+                tableHtml += `
+                \t\t<td id="${assets[i][j].blockchain}_${assets[i][j].exchange}_${assets[i][j].exchange_type}_${assets[i][0].token0.toUpperCase()}${assets[i][0].token1.toUpperCase()}">
+                    <span id="${assets[i][j].blockchain}_${assets[i][j].contract_address}">${assets[i][j].latest_quote? formatNumber(assets[i][j].latest_quote.price) : "NAN"}</span>
+                </td>\n
+                `
+            }
+            tableHtml += `\t</tr>\n</table>\n`
+            _html += tableHtml
         }
-        tableHtml += `\t</tr>\n`
 
-        // Add rows
-        tableHtml += `\t<tr>\n`
-        tableHtml += `\t\t<td>${assets[i][0].base_asset.toUpperCase()}/${assets[i][0].quote_asset.toUpperCase()}</td>\n`
-        for(let j = 0; j < assets[i].length; j++){
-            tableHtml += `
-            \t\t<td id="${assets[i][j].blockchain}_${assets[i][j].exchange}_${assets[i][j].exchange_type}_${assets[i][0].token0.toUpperCase()}${assets[i][0].token1.toUpperCase()}">
-                <span id="${assets[i][j].blockchain}_${assets[i][j].contract_address}">${assets[i][j].latest_quote? formatNumber(assets[i][j].latest_quote.price) : "NAN"}</span>
-            </td>\n
-            `
-        }
-        tableHtml += `\t</tr>\n</table>\n`
-        _html += tableHtml
+        // Add to body
+        const tableContainer = document.createElement("div")
+        tableContainer.innerHTML = _html
+        document.body.appendChild(tableContainer)
+        
+        setupCellIdCopy()
     }
-
-    // // Add to body
-    const tableContainer = document.createElement("div")
-    tableContainer.innerHTML = _html
-    document.body.appendChild(tableContainer)
-    
-    setupCellIdCopy()
 }
 
 /**
@@ -223,12 +228,14 @@ async function updateQuotes(){
         }
 
     })
+    
 }
 
 /**
  * Checks if the quote fetcher script is running or not, If so, change the button style
  */
 async function startBtnLoad(){
+    // Normal operation for non-headless mode
     const response = await (await fetch("/quote/quoteFetcher")).json()
     const data = response.data
     const runningTasks = data.tasks.every(task => task.status !== "running")
@@ -236,7 +243,7 @@ async function startBtnLoad(){
         document.getElementById("activation-btn").textContent = "Start"
         document.getElementById("activation-btn").classList.remove("stop-btn")
         document.getElementById("activation-btn").classList.add("start-btn")
-    }else{
+    } else {
         document.getElementById("activation-btn").textContent = "Stop"
         document.getElementById("activation-btn").classList.remove("start-btn")
         document.getElementById("activation-btn").classList.add("stop-btn")

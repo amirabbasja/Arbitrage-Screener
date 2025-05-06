@@ -366,3 +366,17 @@ table {
 .blacklist-table td{
     border: 1px solid #999898;
 }
+
+/* Add this to your existing CSS file */
+.headless-mode-btn {
+    background-color: #4072d0 !important;
+    cursor: default !important;
+    opacity: 0.8 !important;
+    border-color: transparent !important;
+}
+
+.headless-mode-btn:hover {
+    border-color: transparent !important;
+    opacity: 0.8 !important;
+    cursor: default !important;
+}

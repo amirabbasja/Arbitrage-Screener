@@ -28,6 +28,11 @@
 
 * Populate the **.env** file with necessary data regarding your database. We have used **postgreql** in this project. To get the necessary variable names, check **.env_EXAMPLE** file. Also **timescaleDB** which is an extension of postgresql has been used here. To add the extension to your database, the script needs superuser privilages so username and password of database should be the superuser credentials.
 
+* **./server.js** is the starting point of the applications.
+  * Use nodemon with following command to run the server, if you are in development mode: `npm run dev`
+  * Use `node server.js` to run the application
+  * Use `node server.js --headless` to run the application in headless mode (No UI updates supported)
+
 * All RPCs have a rate-limit. To abide by the rate-limit rules of teh RPCs, we have implemented a bottleneck that servers as a middleware which all the outgoing requests are gone through it. Each RPC will have its own *Bottleneck* instance which can be configured in **/src/utils/requestLimiter.js**.
 
 * When you press **start** on the dashboard page, the app will start getting quotes from the blockchain. This will run the **/src/quoteFetcher.js** file as a child task. Each task that you start will be added to the **tasks** table in the database. The quotes will be saved in the **prices** table in the database and updated real time in teh dashboard using a websocket connection to teh database. Every time a *UPDATE* or *INSERT* or *DELETE* operation is performed on **pairs** table, the database will emit a notification to the websocket server which will update the UI accordingly (These functions and notifications are defined in **./install/setupFunctions.js**).
@@ -38,7 +43,6 @@
   * **tokens** - Contains token information including symbol, blockchain, contract address, and decimal precision
   * **blacklist** - Stores addresses to be excluded from arbitrage opportunities, organized by blockchain
   * **prices** - A TimescaleDB hypertable that stores time-series price data including asset name, chain, timestamp, contract address, exchange details, and price values
-
 
 * When running the app for the first time first run the **./install/setupTables.js** file to create the necessary tables in the database. The timeseries data of acquired prices will be saved in the **prices** table. After that, rin **./install/setupFunctions.js** to make the necessary postgreql functions and notifications. Then run the **./install/getPools.js** file to populate the table **pairs** and **tokens** tables (Will create this table if doesn't exist) with contract addresses for pools in various blockchains and pairs. Note that this file needs you to input three constants so it would run properly, **1. pairs** which stores which pairs we need to look for on what blockchain, and **2. tokenContractAddresses** which stores the contract addresses of the tokens that are in previously defined, pairs object. **3. quoteAssets** which denotes the prices of the assets, should be calculated with regards to these assets (For example if we want to calculate the price of a pool that has *FTM* and *USDT*, *USDT* will be considered as quote and *FTM* as the base asset. The order of the array is important and if we want to calculate price of a pool which as weth and *USDT*, *USDT* will be considered as the quote asset). An example for each variable is added below:
 
@@ -97,5 +101,9 @@ A class that is tasked with getting trading pair contract addresses for differen
 
 ## TODOs
 
+0. Add creating the database with "db_name" located in teh env file when running the **setupTables.js** file
 1. Add router logic to controller directory and make router files logic-less.
 2. Send batch requests to RPCs (Use axios?)
+3. Add a section for manually checking if an RPC is okay and health (Not rate limited)
+4. Add rate-limited calls for each limiter to the UI
+5. Add a headless mode to run the app

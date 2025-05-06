@@ -22,8 +22,22 @@ async function includeTopMenu(){
         }
     }
 
-    // Setup user popup functionality
-    setupUserPopup()
+    // Check if app is running in headless mode
+    const headlessMode = await fetch("/status").then(res => res.json()).then(res => res.data.headless)
+
+    if (headlessMode) {
+        // Replace session button with "Headless mode" inactive button
+        const sessionBtn = document.getElementById("session-btn");
+        if (sessionBtn) {
+            sessionBtn.textContent = "Headless mode";
+            sessionBtn.disabled = true;
+            sessionBtn.classList.add("headless-mode-btn");
+            sessionBtn.onclick = null; // Remove any click handlers
+        }
+    }else{
+        // Setup user popup functionality
+        setupUserPopup()
+    }
 
     // Signal addition of top menu to the page
     document.dispatchEvent(new Event("topMenuLoaded"))
