@@ -35,8 +35,12 @@ async function includeTopMenu(){
             sessionBtn.onclick = null; // Remove any click handlers
         }
     }else{
+        // Only run this section when we are not in a headless mode
         // Setup user popup functionality
         setupUserPopup()
+
+        // Start the stats updater
+        updateLimiterStats()
     }
 
     // Signal addition of top menu to the page
@@ -76,9 +80,6 @@ function setupUserPopup() {
                 })
             }
         })
-
-        // Start the stats updater
-        updateLimiterStats()
     }
 }
 

@@ -10,6 +10,7 @@ import {app} from "./src/app.js"
 import databaseUtils from "./src/utils/dbUtils.js"
 import { Server as WS_Server} from "socket.io"
 import http from "http"
+import { logStats } from "./src/utils/logStats.js"
 
 // Import routers
 import {indexRouter} from "./src/routes/index.js"
@@ -98,6 +99,12 @@ app.use("/settings", settingsRouter)
 // Server setup
 const port = process.env.port || 3000
 
+// Start the server
 server.listen(port, () => {
-    headless ? console.log(`Headless Server is listening on port ${port}...`): console.log(`Server is listening on port ${port}...`)
+    if(headless) {
+        console.log(`Headless Server is listening on port ${port}...`)
+        logStats(500)
+    }else {
+        console.log(`Server is listening on port ${port}...`)
+    }
 })

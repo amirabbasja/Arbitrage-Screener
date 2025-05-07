@@ -18,10 +18,14 @@ requestStatusRouter.get("/", async (req, res) => {
         response.data.headless = app.locals.headless // If the app is running in headless mode (No UI updates)
 
         // Add the running tasks
-        const runningTasks = await databaseUtils.getEntry("tasks", {status:"running"}, app.locals.dbPool)
-        if(runningTasks){        
-                if(runningTasks.length !== 0){
-                response.data.tasks = runningTasks
+        const runningTasks = await databaseUtils.getEntry("tasks", {status:"running"}, app.locals.dbPool, {maxEntries: 100})
+
+        if(runningTasks){     
+            response.data.tasks = []
+            if(runningTasks.length !== 0){
+                for(let i  = 0; i < runningTasks.length; i++){
+                    response.data.tasks.push(runningTasks[i])
+                }
             }
         }
 

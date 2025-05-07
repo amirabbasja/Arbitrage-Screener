@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
+    "dev-h": "nodemon server.js headless",
     "start": "node server.js"
   },
   "keywords": [],

@@ -1,7 +1,6 @@
 // A script that limits the number of requests per minute
 import Bottleneck from "bottleneck"
 import dbUtils from "./dbUtils.js"
-import { el } from "date-fns/locale"
 
 // Store all limiters in a map
 const limiters = new Map()

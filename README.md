@@ -29,7 +29,8 @@
 * Populate the **.env** file with necessary data regarding your database. We have used **postgreql** in this project. To get the necessary variable names, check **.env_EXAMPLE** file. Also **timescaleDB** which is an extension of postgresql has been used here. To add the extension to your database, the script needs superuser privilages so username and password of database should be the superuser credentials.
 
 * **./server.js** is the starting point of the applications.
-  * Use nodemon with following command to run the server, if you are in development mode: `npm run dev`
+  * Use nodemon with following command to run the server,in development mode: `npm run dev`
+  * Use nodemon with following command to run the server in headless mode, in development mode: `npm run dev-h`
   * Use `node server.js` to run the application
   * Use `node server.js --headless` to run the application in headless mode (No UI updates supported)
 

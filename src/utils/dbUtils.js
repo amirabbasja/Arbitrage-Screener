@@ -155,7 +155,7 @@ async function getAllFromTable(tableName, pool) {
 }
 
 /**
- * Retrieves a single entry from a PostgreSQL table based on specific conditions.
+ * Retrieves entries from a PostgreSQL table based on specific conditions.
  * 
  * @param {string} tableName - The name of the table to query
  * @param {Object} conditions - An object containing column/value pairs for filtering
@@ -165,7 +165,8 @@ async function getAllFromTable(tableName, pool) {
  *      To pass multiple fields, embed them in an array. If you need a single column,
  *      passing a single string would suffice as well.
  * @param {Object} [options.sort] - Sorting criteria {field: 'asc'|'desc'}
- * @returns {Promise<Object|null>} The found entry or null if not found
+ * @param {number} [options.maxEntries=1] - The maximum number of entries to return
+ * @returns {Promise<Object|Array|null>} The found entry/entries or null if not found
  * @throws {Error} If the database query fails
  */
 async function getEntry(tableName, conditions, pool, options = {}) {
@@ -199,10 +200,20 @@ async function getEntry(tableName, conditions, pool, options = {}) {
         }
     }
 
+    // Set the limit based on maxEntries option (default to 1 for backward compatibility)
+    const limit = options.maxEntries ? options.maxEntries : 1;
+
     // Construct the full query
-    const query = `SELECT ${fields} FROM ${tableName} ${whereClause} ${orderByClause} LIMIT 1`
+    const query = `SELECT ${fields} FROM ${tableName} ${whereClause} ${orderByClause} LIMIT ${limit}`
     try {
         const result = await pool.query(query, whereParams)
+        
+        // If maxEntries is specified and greater than 1, return the array of results
+        if (options.maxEntries && options.maxEntries > 1) {
+            return result.rows.length > 0 ? result.rows : null
+        }
+        
+        // Otherwise maintain backward compatibility by returning just the first row
         return result.rows.length > 0 ? result.rows[0] : null
     } catch (error) {
         throw new Error(`Failed to retrieve entry from ${tableName}: ${error.message}`)
