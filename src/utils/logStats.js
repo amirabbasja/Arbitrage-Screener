@@ -1,5 +1,6 @@
 import { stringify } from "querystring";
 import readline from "readline";
+import { text } from "stream/consumers";
 
 /**
  * Formats time in milliseconds to a human-readable string (seconds, minutes, or hours)
@@ -10,16 +11,28 @@ function formatTime(ms) {
     const seconds = ms / 1000;
     
     if (seconds < 60) {
-        return `${seconds.toFixed(1)} seconds`;
+        return `${seconds.toFixed(1)} seconds`
     } else if (seconds < 3600) {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = (seconds % 60).toFixed(1);
-        return `${minutes} m${minutes !== 1 ? 's' : ''} ${remainingSeconds} s`;
+        const minutes = Math.floor(seconds / 60)
+        const remainingSeconds = (seconds % 60).toFixed(1)
+        return `${minutes} m${minutes !== 1 ? 's' : ''} ${remainingSeconds} s`
     } else {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return `${hours} h${hours !== 1 ? 's' : ''} ${minutes} m${minutes !== 1 ? 's' : ''}`;
+        const hours = Math.floor(seconds / 3600)
+        const minutes = Math.floor((seconds % 3600) / 60)
+        return `${hours} h${hours !== 1 ? 's' : ''} ${minutes} m${minutes !== 1 ? 's' : ''}`
     }
+}
+function logMemoryUsage() {
+    const memoryUsage = process.memoryUsage()
+    const formatMB = (bytes) => (bytes / (1024 * 1024)).toFixed(2)
+
+    let text = ""
+    text += 'Memory Usage (MB):\n'
+    text += `  Heap Total: ${formatMB(memoryUsage.heapTotal)} MB\n`
+    text += `  Heap Used: ${formatMB(memoryUsage.heapUsed)} MB\n`
+    text += `  External: ${formatMB(memoryUsage.external)} MB\n`
+    text += `  RSS: ${formatMB(memoryUsage.rss)} MB\n`
+    return text
 }
 
 /**
@@ -31,19 +44,19 @@ function formatTime(ms) {
 async function logStats(delay){
     async function updateLog(appStartTime) {
         let text = ""
-
         // Clear previous output
         readline.cursorTo(process.stdout, 0, 0);
         readline.clearScreenDown(process.stdout);
 
         const appUptime = new Date() - appStartTime;
-        text += `App is running for ${formatTime(appUptime)}\n`;
+        text += `App is running for ${formatTime(appUptime)}\n\n`;
+        text += logMemoryUsage() + "\n"
         const response = await fetch(`http://${process.env.app_host}:${process.env.app_port}/status`)
             .then(res => res.json())
     
         if (response){
             if (response.status === "success"){
-                text += "Active Tasks\n--------------\n"
+                text += "Active Tasks\n--------------\n" 
                 const tasks = response.data.tasks
                 if(tasks){
                     for (let i = 0; i < tasks.length; i++){
