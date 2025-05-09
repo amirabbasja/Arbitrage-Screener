@@ -61,47 +61,55 @@ async function setupLoops(delays, tasks, taskId) {
  * @param {string} taskId - The ID of the current task
  */
 async function requestSender(pairs, taskId){
-    const urls = pairs.map((pair) => {
-        return `http://${process.env.app_host}:${process.env.app_port}/quote/${pair.blockchain}/${pair.exchange}_${pair.exchange_type}/${pair.contract_address}?taskId=${taskId}`
-    })
-
-    const requests = urls.map((url) => {
-        return fetch(url).then(async (res) => {
-            // Update the database with the fetched quote
-            let response = (await res.json())
-
-            if (response.status === "success") {
-                const result = await databaseUtils.updateRecords("pairs", app.locals.dbPool, 
-                    {
-                        blockchain: response.data.chain,
-                        exchange: response.data.exchangeName,
-                        exchange_type: response.data.exchangeVersion,
-                        contract_address: response.data.pool_address,
-                    },
-                    {
-                        latest_quote: {price: response.data.quote.price, timestamp: Date.now()}
-                    }
-                )
-            }else{
-                const result = await databaseUtils.updateRecords("pairs", app.locals.dbPool, 
-                    {
-                        blockchain: response.data.params.chain,
-                        exchange: response.data.params.exchangeName,
-                        exchange_type: response.data.params.exchangeVersion,
-                        contract_address: response.data.params.pool_address,
-                    },
-                    {
-                        latest_quote: {price: "ERR", timestamp: Date.now()}
-                    }
-                )
-            }
+    try {
+        const urls = pairs.map((pair) => {
+            return `http://${process.env.app_host}:${process.env.app_port}/quote/${pair.blockchain}/${pair.exchange}_${pair.exchange_type}/${pair.contract_address}?taskId=${taskId}`
         })
-    })
 
-    // Send requests
-    const results = await Promise.allSettled(requests)
-    
-    return results;
+        const requests = urls.map((url) => {
+            return fetch(url)
+                .then(async (res) => {
+                    // Update the database with the fetched quote
+                    let response = (await res.json())
+
+                    if (response.status === "success") {
+                        const result = await databaseUtils.updateRecords("pairs", app.locals.dbPool, 
+                            {
+                                blockchain: response.data.chain,
+                                exchange: response.data.exchangeName,
+                                exchange_type: response.data.exchangeVersion,
+                                contract_address: response.data.pool_address,
+                            },
+                            {
+                                latest_quote: {price: response.data.quote.price, timestamp: Date.now()}
+                            }
+                        )
+                    }else{
+                        const result = await databaseUtils.updateRecords("pairs", app.locals.dbPool, 
+                            {
+                                blockchain: response.data.params.chain,
+                                exchange: response.data.params.exchangeName,
+                                exchange_type: response.data.params.exchangeVersion,
+                                contract_address: response.data.params.pool_address,
+                            },
+                            {
+                                latest_quote: {price: "ERR", timestamp: Date.now()}
+                            }
+                        )
+                    }
+                })
+                .catch(err => {
+                    console.error(`QuoteFetcher: Request failed for ${url}:`, err);
+                    return null; // Prevent unhandled rejections
+                });
+        });
+
+        const results = await Promise.allSettled(requests);
+        return results.filter(result => result !== null);
+    } catch (err) {
+        console.error('Error in requestSender:', err);
+        return [];
+    }
 }
 
 /**

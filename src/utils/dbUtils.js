@@ -201,7 +201,7 @@ async function getEntry(tableName, conditions, pool, options = {}) {
     }
 
     // Set the limit based on maxEntries option (default to 1 for backward compatibility)
-    const limit = options.maxEntries ? options.maxEntries : 1;
+    const limit = options.maxEntries ? options.maxEntries : 1
 
     // Construct the full query
     const query = `SELECT ${fields} FROM ${tableName} ${whereClause} ${orderByClause} LIMIT ${limit}`
@@ -229,15 +229,15 @@ async function getEntry(tableName, conditions, pool, options = {}) {
 const getTableAsJson = async (tableName, pool) => {
     try {
         // Query the table
-        const result = await pool.query(`SELECT * FROM ${tableName}`);
+        const result = await pool.query(`SELECT * FROM ${tableName}`)
 
         // Return the rows as JSON
-        return result.rows;
+        return result.rows
     } catch (error) {
-        console.error('Error retrieving table data:', error);
-        throw error;
+        console.error('Error retrieving table data:', error)
+        throw error
     }
-};
+}
 
 /**
  * Deletes a single entry from a PostgreSQL table based on specific conditions.
@@ -314,10 +314,70 @@ async function updateRecords(tableName, pool, conditions, updates) {
     }
 }
 
+/**
+ * Gets PostgreSQL memory usage statistics
+ * @param {Pool} pool - The pool of database connections
+ * @returns {Promise<Object>} Memory usage statistics
+ */
+async function getPgMemoryStats(pool) {
+    try {
+        // Query for overall PostgreSQL memory usage
+        const overallMemoryResult = await pool.query(`
+            SELECT 
+            pg_size_pretty(sum(pg_database_size(datname))) AS total_db_size,
+            pg_size_pretty(pg_database_size(current_database())) AS current_db_size
+            FROM pg_database;
+        `)
+
+        // Query for connection-specific memory usage
+        const connectionMemoryResult = await pool.query(`
+            SELECT 
+            count(*) AS active_connections,
+            pg_size_pretty(sum(pg_total_relation_size(relid))) AS total_relation_size
+            FROM pg_stat_activity, pg_statio_user_tables
+            WHERE datname = current_database();
+        `)
+
+        // Query for cache usage
+        const cacheResult = await pool.query(`
+            SELECT 
+              pg_size_pretty(blks_hit * 8192) AS cache_hit_size,
+              pg_size_pretty(blks_read * 8192) AS disk_read_size
+            FROM pg_stat_database
+            WHERE datname = current_database();
+        `)
+        
+        return {
+            totalDatabaseSize: overallMemoryResult.rows[0].total_db_size,
+            currentDatabaseSize: overallMemoryResult.rows[0].current_db_size,
+            activeConnections: connectionMemoryResult.rows[0].active_connections,
+            relationSize: connectionMemoryResult.rows[0].total_relation_size,
+            cacheHitSize: cacheResult.rows[0]?.cache_hit_size || '0 bytes',
+            diskReadSize: cacheResult.rows[0]?.disk_read_size || '0 bytes',
+            poolStats: {
+                totalConnections: pool.totalCount || 0,
+                idleConnections: pool.idleCount || 0,
+                waitingClients: pool.waitingCount || 0
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching PostgreSQL memory stats:', error);
+        return {
+            error: error.message,
+            poolStats: {
+            totalConnections: pool.totalCount || 0,
+            idleConnections: pool.idleCount || 0,
+            waitingClients: pool.waitingCount || 0
+            }
+        }
+    }
+}
+
 export default { 
     testDatabaseConnection,
     checkDatabaseExists,
     checkTableExists,
+    getPgMemoryStats,
     getAllFromTable,
     createDatabase,
     getTableAsJson,

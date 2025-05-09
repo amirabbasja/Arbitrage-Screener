@@ -1192,18 +1192,18 @@ class crawler{
 
 // prettifyAndCopyJson(join(getDirPath(), "ABIs/uniswapV2Factory.json"))
 
-// Get the api key from the .env file
-dotenv.config({ path: join(getDirPath(), "../../.env") })
+// // Get the api key from the .env file
+// dotenv.config({ path: join(getDirPath(), "../../.env") })
 
-const crawlerHandler = new crawler(process.env.alchemy_api_key)
-const _ethHandler = new ethHandler(process.env.alchemy_api_key)
-const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
-const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
-const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f"
-const poolV3 = "0xC4ce8E63921b8B6cBdB8fCB6Bd64cC701Fb926f2"
-const poolV2 = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
-const sushiV2Pool = "0xC40D16476380e4037e6b1A2594cAF6a6cc8Da967"
-const sushiV3Pool = "0x01b94ac1abf25c132bced6918513f1822d0dc52f"
+// const crawlerHandler = new crawler(process.env.alchemy_api_key)
+// const _ethHandler = new ethHandler(process.env.alchemy_api_key)
+// const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // Wrapped Ether
+// const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7' // Tether USD
+// const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f"
+// const poolV3 = "0xC4ce8E63921b8B6cBdB8fCB6Bd64cC701Fb926f2"
+// const poolV2 = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
+// const sushiV2Pool = "0xC40D16476380e4037e6b1A2594cAF6a6cc8Da967"
+// const sushiV3Pool = "0x01b94ac1abf25c132bced6918513f1822d0dc52f"
 
 // console.log(await _ethHandler.getPoolInfo_offline("0x72c2178E082feDB13246877B5aA42ebcE1b72218", "eth", app.locals.dbPool, ["contract_address", "token0", "token1"]))
 // console.log(await _ethHandler.getPoolInfo_sushiswap_V2(sushiV3Pool))

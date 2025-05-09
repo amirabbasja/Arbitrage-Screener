@@ -32,7 +32,8 @@
   * Use nodemon with following command to run the server,in development mode: `npm run dev`
   * Use nodemon with following command to run the server in headless mode, in development mode: `npm run dev-h`
   * Use `node server.js` to run the application
-  * Use `node server.js --headless` to run the application in headless mode (No UI updates supported)
+  * Use `node server.js headless` to run the application in headless mode (No UI updates supported)
+  * Use `node server.js headless run-fetcher` to run the application in headless mode and start the quote fetcher (No UI updates supported)
 
 * All RPCs have a rate-limit. To abide by the rate-limit rules of teh RPCs, we have implemented a bottleneck that servers as a middleware which all the outgoing requests are gone through it. Each RPC will have its own *Bottleneck* instance which can be configured in **/src/utils/requestLimiter.js**.
 
@@ -105,6 +106,7 @@ A class that is tasked with getting trading pair contract addresses for differen
 0. Add creating the database with "db_name" located in teh env file when running the **setupTables.js** file
 1. Add router logic to controller directory and make router files logic-less.
 2. Send batch requests to RPCs (Use axios?)
-3. Add a section for manually checking if an RPC is okay and health (Not rate limited)
+3. Add a section for manually checking if an RPC is okay and healthy (Not rate limited)
 4. Add rate-limited calls for each limiter to the UI
-5. Add a headless mode to run the app
+5. Delete the taskId that you send when requesting
+6. Add a a section for manually running a script via commandline by passing an argument

@@ -35,15 +35,21 @@ if(await  databaseUtils.checkTableExists("tasks", app.locals.dbPool, "public")){
 }
 
 // Get the arguments
-let headless
+let headless, runFetcher
 const args = process.argv.slice(2)
 
-if( args.length == 0 || args[0] !== "headless") {
+if( args.length == 0) {
     headless = false
-    app.locals.headless = false
-}else{
-    headless = true
-    app.locals.headless = true
+    app.locals.headless = headless
+    runFetcher = false
+} else if (args.length == 1){
+    headless = args[0] == "headless" ? true : false
+    app.locals.headless = headless
+    runFetcher = false
+} else if (args.length == 2){
+    headless = args[0] == "headless" ? true : false
+    app.locals.headless = headless
+    runFetcher = args[1] == "run-fetcher" ? true : false
 }
 
 // Load .env files

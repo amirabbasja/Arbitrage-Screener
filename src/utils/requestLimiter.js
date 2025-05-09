@@ -91,10 +91,15 @@ function generateRequestKey(req) {
 // Updated middleware that accepts a limiter name
 async function rateLimitMiddleware(handler) {
     return async (req, res, next) => {
+        // The name of the specific limiter to use
         let limiterName
         
         // Set the limiter name according to the exchange
+        const address = req.params.address 
+        const chain = req.params.chain
         const exchangeName = req.params.exchange.split("_")[0]
+        const exchangeVersion = req.params.exchange.split("_")[1] || "unknown"
+
         if(exchangeName === "curveProtocol"){
             limiterName = "curve-API"
         }else{
@@ -105,10 +110,20 @@ async function rateLimitMiddleware(handler) {
             const limiter = limiters.get(limiterName)
             
             if (!limiter) {
-                return res.status(500).json({ 
-                    error: 'Limiter configuration error', 
-                    message: `Limiter "${limiterName}" not found` 
-                })
+                return res.status(500).json(
+                    {
+                        status: "error",
+                        data: {
+                            msg: `Limiter configuration error. Limiter "${limiterName}" not found`,
+                            params: {
+                                chain: chain,
+                                pool_address: address,
+                                exchangeName: exchangeName,
+                                exchangeVersion: exchangeVersion
+                            }
+                        }
+                    }
+                )
             }
             
             const stats = limiterStats.get(limiterName)
@@ -119,13 +134,22 @@ async function rateLimitMiddleware(handler) {
             
             // Check if this request is already in flight
             if (inFlightRequests.has(requestKey)) {
-                return res.status(409).json({ 
-                    error: 'Duplicate request detected', 
-                    message: 'A similar request is already being processed' 
-                })
+                return res.status(409).json(
+                    {
+                        status: "error",
+                        data: {
+                            msg: `Duplicate request detected. A similar request is already being processed`,
+                            params: {
+                                chain: chain,
+                                pool_address: address,
+                                exchangeName: exchangeName,
+                                exchangeVersion: exchangeVersion
+                            }
+                        }
+                    }
+                )
             }
 
-            
             // If taskId is provided, update stats in the database before and after execution
             if (taskId) {
                 // Get current stats before execution
@@ -152,6 +176,8 @@ async function rateLimitMiddleware(handler) {
                             if (taskResult) {
                                 // Parse existing taskResult.extra_info or create new object
                                 let extraInfo = {}
+
+                                // Add the extra_info key
                                 if(taskResult.extra_info){
                                     if(!taskResult.extra_info.limiterStats){
                                         extraInfo = {limiterStats:{}}
@@ -161,8 +187,10 @@ async function rateLimitMiddleware(handler) {
                                 }else{
                                     extraInfo = {limiterStats:{}}
                                 }
-
                                 extraInfo.limiterStats[limiterName] = { ...stats }
+
+                                // Add inFlightRequests
+                                extraInfo.inFlightRequests = inFlightRequests.size
 
                                 // Save back to database
                                 await dbUtils.updateRecords(
@@ -187,7 +215,11 @@ async function rateLimitMiddleware(handler) {
                 // Regular execution without task tracking
                 await limiter.schedule(async () => {
                     try {
-                        await handler(req, res, next)
+                        try {
+                            await handler(req, res, next)
+                        } catch (error) {
+                            console.error('Request handler error:', error)
+                        }
                     } finally {
                         // Remove from in-flight requests when done
                         inFlightRequests.delete(requestKey)

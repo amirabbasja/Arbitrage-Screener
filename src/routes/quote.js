@@ -12,17 +12,22 @@ import { format } from "date-fns"
 
 const quotesRouter = express.Router()
 
-// Define the handlers
-const handler_ETH = new ethHandler(process.env.alchemy_api_key, app.locals.dbPool)
-
+// Get price of an asset
 quotesRouter.get("/:chain/:exchange/:address", 
     await rateLimitMiddleware(
         async (req, res, next) => {
+            // Necessary variables
             const address = req.params.address 
             const chain = req.params.chain
             const exchangeName = req.params.exchange.split("_")[0]
             const exchangeVersion = req.params.exchange.split("_")[1] || "unknown"
-            const taskId = req.query.taskId // Optional variable
+            let  handler = null
+
+            // Select the appropriate handler
+            if(chain === "eth"){
+                // Define the handlers
+                handler = new ethHandler(process.env.alchemy_api_key, app.locals.dbPool)
+            }
 
             try{
                 // TODO: Add a section that checks if exchange name is valid
@@ -38,18 +43,21 @@ quotesRouter.get("/:chain/:exchange/:address",
                     })
                 } 
 
-                let quote, poolInfo
+                let quote
                 
                 try{
-                    quote = await handler_ETH[`getPoolPrice_${exchangeName}_${exchangeVersion}`](address)
+                    quote = await handler[`getPoolPrice_${exchangeName}_${exchangeVersion}`](address)
                 }catch(err){
                     try{
                         // Try for exchanges that don't have a version (CEX or DEX)
-                        quote = await handler_ETH[`getPoolPrice_${exchangeName}`](address)
+                        quote = await handler[`getPoolPrice_${exchangeName}`](address)
                     }catch(err){
                         throw err
                     }
                 }
+                
+                // Return the handler object to free up memory
+                handler = null
                 
                 // Add the acquired price to prices database
                 if (quote !== null && quote !== undefined) {
@@ -68,20 +76,33 @@ quotesRouter.get("/:chain/:exchange/:address",
                     } catch (priceErr) {
                         console.error(`Failed to add price to timeseries: ${priceErr.message}`)
                     }
+
+                    res.status(200).json({
+                        status: "success",
+                        data: {
+                            quote: quote,
+                            chain: chain,
+                            pool_address: address,
+                            exchangeName: exchangeName,
+                            exchangeVersion: exchangeVersion
+                        }
+                    })
+                }else{
+                    res.status(500).json({
+                        status: "error",
+                        data: {
+                            msg: `Dedicated function returned null or undefined as the quote`,
+                            params: {
+                                chain: chain,
+                                pool_address: address,
+                                exchangeName: exchangeName,
+                                exchangeVersion: exchangeVersion
+                            }
+                        }
+                    })
                 }
 
-                res.status(200).json({
-                    status: "success",
-                    data: {
-                        quote: quote,
-                        chain: chain,
-                        pool_address: address,
-                        exchangeName: exchangeName,
-                        exchangeVersion: exchangeVersion
-                    }
-                })
             } catch(err){
-                
                 res.status(500).json({
                     status: "error",
                     data: {

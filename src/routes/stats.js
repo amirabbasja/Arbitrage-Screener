@@ -17,6 +17,15 @@ requestStatusRouter.get("/", async (req, res) => {
         // Add the application overall params
         response.data.headless = app.locals.headless // If the app is running in headless mode (No UI updates)
 
+        // Add database pool details
+        response.data.databasePoolStatistics = {
+            totalCount: app.locals.dbPool.totalCount,
+            idleCount: app.locals.dbPool.idleCount,
+            waitingCount: app.locals.dbPool.waitingCount
+        }
+
+        // response.data.memoryStats = await databaseUtils.getPgMemoryStats(app.locals.dbPool)
+
         // Add the running tasks
         const runningTasks = await databaseUtils.getEntry("tasks", {status:"running"}, app.locals.dbPool, {maxEntries: 100})
 
